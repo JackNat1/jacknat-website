@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contact | JackNat Consulting</title>
+  <meta name="description" content="Contact JackNat Consulting: +1 (657) 747-9755, 4606 Chelsea Meadow Ct, La Grange, KY 40031. Mon–Fri 9am–5pm.">
+  <link rel="icon" href="images/favicon.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="logo" href="index.html">
+        <img class="logo-icon" src="images/logo-mark-gold.png" alt="" width="40" height="40">
+        <span class="logo-text">
+          <span class="logo-mark">Jack<span>Nat</span></span>
+          <span class="logo-sub">Consulting</span>
+        </span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="enterprise.html">Enterprise</a></li>
+          <li><a href="connected-home.html">Connected Home</a></li>
+          <li><a href="services.html">Services</a></li>
+          <li><a href="about.html">About</a></li>
+          <li><a class="nav-cta" href="contact.html" aria-current="page">Contact</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container">
+        <span class="eyebrow" style="color:var(--teal-400)">Get in touch</span>
+        <h1>Contact</h1>
+        <p class="lede">Tell us about your environment—plant floor, office stack, or home—and we’ll follow up during business hours.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container contact-grid">
+        <div>
+          <h2 class="mt-0">Reach us directly</h2>
+          <ul class="contact-details">
+            <li>
+              <span class="label">Phone</span>
+              <a href="tel:+16577479755">+1 (657) 747-9755</a>
+            </li>
+            <li>
+              <span class="label">Email</span>
+              <span style="display:block;margin-top:0.35rem">
+                <strong style="font-weight:600;color:var(--slate-700)">Enterprise ERP &amp; business technology</strong><br>
+                <a href="mailto:erp@jacknat.com">erp@jacknat.com</a>
+              </span>
+              <span class="contact-sl-row" style="display:flex;margin-top:0.75rem">
+                <img class="sl-logo-inline" src="images/logo-mark-gold.png" alt="" width="28" height="28">
+                <span>
+                  <strong style="font-weight:600;color:var(--slate-700)">Residential smart living</strong><br>
+                  <a href="mailto:smart.living@jacknat.com">smart.living@jacknat.com</a>
+                </span>
+              </span>
+            </li>
+            <li>
+              <span class="label">Address</span>
+              4606 Chelsea Meadow Ct<br>
+              La Grange, KY 40031
+            </li>
+            <li>
+              <span class="label">Hours</span>
+              Monday–Friday: 9:00 am – 5:00 pm<br>
+              Saturday–Sunday: Closed
+            </li>
+          </ul>
+          <div class="btn-group">
+            <a class="btn btn-primary" href="tel:+16577479755">Call now</a>
+            <a class="btn btn-outline" href="mailto:erp@jacknat.com?subject=Enterprise%20ERP%20inquiry">Email ERP</a>
+            <a class="btn btn-outline" href="mailto:smart.living@jacknat.com?subject=Connected%20Home%20inquiry">Email smart living</a>
+          </div>
+        </div>
+
+        <div class="contact-form">
+          <h2 class="mt-0">Send a message</h2>
+          <p class="form-note" role="note">
+            Choose your interest below. The draft opens in your mail app to <strong>erp@jacknat.com</strong> for ERP &amp; business technology, or <strong>smart.living@jacknat.com</strong> for residential smart living. “Both” / “Other” go to the ERP inbox with a clear subject line. No server backend is included.
+          </p>
+          <form id="contact-form" action="mailto:erp@jacknat.com" method="get" enctype="text/plain">
+            <input type="hidden" name="subject" value="JackNat Consulting website inquiry">
+            <div class="form-row">
+              <label for="name">Name</label>
+              <input type="text" id="name" name="name" autocomplete="name" required>
+            </div>
+            <div class="form-row">
+              <label for="email">Email</label>
+              <input type="email" id="email" name="email" autocomplete="email" required>
+            </div>
+            <div class="form-row">
+              <label for="phone">Phone <span style="font-weight:400;color:var(--slate-500)">(optional)</span></label>
+              <input type="tel" id="phone" name="phone" autocomplete="tel">
+            </div>
+            <div class="form-row">
+              <label for="interest">I’m interested in</label>
+              <select id="interest" name="interest">
+                <option value="Enterprise ERP">Enterprise ERP &amp; business technology</option>
+                <option value="Connected Home">Connected home / smart living</option>
+                <option value="Both">Both practices</option>
+                <option value="Other">Other / not sure</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="message">Message</label>
+              <textarea id="message" name="body" required placeholder="Briefly describe your project, timeline, and location."></textarea>
+            </div>
+            <button class="btn btn-primary" type="submit">Open email draft</button>
+            <p class="form-hint">Submitting opens a draft in your default mail app with the details filled in. Prefer the phone? Call <a href="tel:+16577479755">+1 (657) 747-9755</a>.</p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="logo-mark">Jack<span style="color:var(--teal-400)">Nat</span></div>
+          <p>Enterprise systems. Connected homes. Integrated technology.</p>
+        </div>
+        <div>
+          <h3>Practices</h3>
+          <ul>
+            <li><a href="enterprise.html">Enterprise ERP</a></li>
+            <li><a href="connected-home.html">Connected Home</a></li>
+            <li><a href="services.html">Services</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Company</h3>
+          <ul>
+            <li><a href="about.html">About</a></li>
+            <li><a href="contact.html">Contact</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="tel:+16577479755">+1 (657) 747-9755</a></li>
+            <li>4606 Chelsea Meadow Ct<br>La Grange, KY 40031</li>
+            <li>Mon–Fri 9:00 am – 5:00 pm</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 JackNat Consulting, LLC. All rights reserved.</p>
+        <p class="footer-emails">
+          <span>Enterprise ERP &amp; business technology: <a href="mailto:erp@jacknat.com">erp@jacknat.com</a></span>
+          <span>Residential smart living: <a href="mailto:smart.living@jacknat.com">smart.living@jacknat.com</a></span>
+        </p>
+      </div>
+    </div>
+  </footer>
+  <script src="js/main.js"></script>
+  <script>
+    (function () {
+      var form = document.getElementById("contact-form");
+      if (!form) return;
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var name = document.getElementById("name").value.trim();
+        var email = document.getElementById("email").value.trim();
+        var phone = document.getElementById("phone").value.trim();
+        var interest = document.getElementById("interest").value;
+        var message = document.getElementById("message").value.trim();
+        var body =
+          "Name: " + name + "\n" +
+          "Email: " + email + "\n" +
+          "Phone: " + (phone || "(not provided)") + "\n" +
+          "Interest: " + interest + "\n\n" +
+          message;
+        var to = "erp@jacknat.com";
+        if (interest === "Connected Home") {
+          to = "smart.living@jacknat.com";
+        }
+        var mailto =
+          "mailto:" + to +
+          "?subject=" + encodeURIComponent("JackNat inquiry — " + interest) +
+          "&body=" + encodeURIComponent(body);
+        window.location.href = mailto;
+      });
+    })();
+  </script>
+</body>
+</html>
