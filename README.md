@@ -85,7 +85,7 @@ Home, About, Contact, and Services footers show **both** addresses labeled. Ente
 
 ## Design notes
 
-- Palette: deep navy / charcoal with teal accent.
+- Palette: deep navy / charcoal with gold and silver accents sampled from the JN logo.
 - Text wordmark: **JackNat** / Consulting (no separate logo asset).
 - Integration levels (Connected Home): SVG pyramid + four detailed level cards (L1–L4).
 - Enterprise parallel: Operate → Optimize → Architect → Lead.
