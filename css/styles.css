@@ -111,7 +111,7 @@ li { margin-bottom: 0.35rem; }
   font-size: 0.7rem; font-weight: 500; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--silver-400);
 }
-/* Smart Living brand mark (connected home) */
+/* Path brand marks (enterprise + smart living) */
 .sl-logo {
   display: block; height: auto; max-width: 100%;
 }
