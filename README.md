@@ -11,6 +11,7 @@ Static multi-page marketing website for **JackNat Consulting, LLC**.
 | `index.html` | Home — business vs home paths, how we work, differentiators |
 | `enterprise.html` | Enterprise ERP & business technology |
 | `connected-home.html` | Residential smart living + **4-level integration** visual |
+| `connected-home-products.html` | Connected Home & Smart Living **Products** — homeowner-need categories, Works Together, existing-tech, Foundation/Integrated/Signature |
 | `services.html` | Full service catalog (residential + enterprise highlights) |
 | `about.html` | Company / experience / shared systems approach |
 | `contact.html` | Phone, address, hours, mailto-based contact form |
