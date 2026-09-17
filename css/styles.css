@@ -277,9 +277,37 @@ li { margin-bottom: 0.35rem; }
 }
 .path-card-top h3 { color: var(--white); }
 .path-card-top .eyebrow { color: var(--gold-400); }
+.path-card-brand {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem 1.25rem; margin-bottom: 1.25rem; min-height: 5.5rem;
+}
+.path-card-brand .sl-logo-card {
+  margin: 0; flex-shrink: 0; width: min(140px, 42%);
+}
+.path-choice-label {
+  margin: 0; flex: 1; min-width: 0;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: clamp(1.65rem, 4.5vw, 2.15rem);
+  font-weight: 700; line-height: 1.1;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--gold-400);
+}
 .path-card-body { padding: 1.75rem; flex: 1; display: flex; flex-direction: column; }
 .path-card-body ul { flex: 1; color: var(--slate-600); }
 .path-card-body .btn { margin-top: 1.25rem; align-self: flex-start; }
+
+@media (max-width: 420px) {
+  .path-card-brand {
+    flex-direction: column; align-items: flex-start; min-height: 0; gap: 0.85rem;
+  }
+  .path-card-brand .sl-logo-card { width: 120px; }
+  .path-choice-label {
+    justify-content: flex-start; text-align: left;
+    font-size: clamp(1.45rem, 8vw, 1.85rem);
+  }
+}
 
 /* Process steps */
 .process-grid {
