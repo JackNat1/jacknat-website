@@ -8,11 +8,11 @@ Static multi-page marketing website for **JackNat Consulting, LLC**.
 
 | File | Purpose |
 |------|---------|
-| `index.html` | Home — dual-practice positioning, how we work, differentiators |
+| `index.html` | Home — business vs home paths, how we work, differentiators |
 | `enterprise.html` | Enterprise ERP & business technology |
 | `connected-home.html` | Residential smart living + **4-level integration** visual |
 | `services.html` | Full service catalog (residential + enterprise highlights) |
-| `about.html` | Company / experience / dual-practice story |
+| `about.html` | Company / experience / shared systems approach |
 | `contact.html` | Phone, address, hours, mailto-based contact form |
 | `css/styles.css` | Shared styles |
 | `js/main.js` | Mobile nav toggle |
@@ -71,12 +71,12 @@ bye
 
 ## Contact emails
 
-| Practice | Address | Where used |
+| Audience | Address | Where used |
 |----------|---------|------------|
-| Enterprise ERP & business technology | `erp@jacknat.com` | Enterprise page, contact dual labels, form when interest = Enterprise / Both / Other |
+| Enterprise ERP & business technology | `erp@jacknat.com` | Enterprise page, contact dual labels, form when interest = Enterprise / Business and home / Other |
 | Residential smart living | `smart.living@jacknat.com` | Connected Home page, contact dual labels, form when interest = Connected Home |
 
-Home, About, Contact, and Services footers show **both** addresses labeled. Enterprise vs Connected Home footers/CTAs use the practice-specific address.
+Home, About, Contact, and Services footers show **both** addresses labeled. Enterprise vs Connected Home footers/CTAs use the matching address.
 
 ## Content TODOs
 
