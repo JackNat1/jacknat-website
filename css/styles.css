@@ -111,7 +111,7 @@ li { margin-bottom: 0.35rem; }
   font-size: 0.7rem; font-weight: 500; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--silver-400);
 }
-/* Smart Living brand mark (residential practice) */
+/* Smart Living brand mark (connected home) */
 .sl-logo {
   display: block; height: auto; max-width: 100%;
 }
@@ -266,20 +266,20 @@ li { margin-bottom: 0.35rem; }
   border-top: 3px solid var(--gold-500);
 }
 
-/* Practice dual cards on home */
-.practice-card {
+/* Business / home path cards on home */
+.path-card {
   background: var(--white); border-radius: var(--radius-lg);
   border: 1px solid var(--slate-200); overflow: hidden;
   display: flex; flex-direction: column; box-shadow: var(--shadow-sm);
 }
-.practice-card-top {
+.path-card-top {
   background: var(--navy-900); color: var(--slate-300); padding: 1.75rem;
 }
-.practice-card-top h3 { color: var(--white); }
-.practice-card-top .eyebrow { color: var(--gold-400); }
-.practice-card-body { padding: 1.75rem; flex: 1; display: flex; flex-direction: column; }
-.practice-card-body ul { flex: 1; color: var(--slate-600); }
-.practice-card-body .btn { margin-top: 1.25rem; align-self: flex-start; }
+.path-card-top h3 { color: var(--white); }
+.path-card-top .eyebrow { color: var(--gold-400); }
+.path-card-body { padding: 1.75rem; flex: 1; display: flex; flex-direction: column; }
+.path-card-body ul { flex: 1; color: var(--slate-600); }
+.path-card-body .btn { margin-top: 1.25rem; align-self: flex-start; }
 
 /* Process steps */
 .process-grid {
