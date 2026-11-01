@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy | JackNat Consulting</title>
+  <meta name="description" content="How jacknat.com handles consultation and builder-meeting form submissions, visit tracking fields, and Google Ads measurement.">
+  <link rel="icon" href="/images/favicon.png">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="logo" href="/">
+        <img class="logo-icon" src="/images/logo-mark-gold.png" alt="" width="40" height="40">
+        <span class="logo-text">
+          <span class="logo-mark">Jack<span>Nat</span></span>
+          <span class="logo-sub">Consulting</span>
+        </span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+      <nav class="site-nav" id="site-nav" aria-label="Primary">
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/enterprise.html">Enterprise</a></li>
+          <li><a href="/connected-home.html">Connected Home</a></li>
+          <li><a href="/connected-home-products.html">Products</a></li>
+          <li><a href="/services.html">Services</a></li>
+          <li><a href="/about.html">About</a></li>
+          <li><a class="nav-cta" href="/contact.html">Contact</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container">
+        <span class="eyebrow" style="color:var(--gold-400)">JackNat Consulting</span>
+        <h1>Privacy</h1>
+        <p class="lede">What the forms on this site collect, and how visit and advertising measurement work.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container landing-prose">
+        <p>This website, jacknat.com, is operated by JackNat Consulting, LLC, the business named in the site footer. This page describes the consultation and meeting forms, the visit fields stored with them, and Google Ads measurement. It matches the pages and scripts currently published here.</p>
+
+        <h2>Contact page</h2>
+        <p>The form on the <a href="/contact.html">Contact</a> page opens an email draft in your mail app. It is not submitted to this website and is not stored by the site host. Enterprise and business messages are addressed to erp@jacknat.com. Connected-home messages are addressed to smart.living@jacknat.com.</p>
+
+        <h2>Forms on this site</h2>
+        <p>Two forms are submitted to the site host, Netlify, which stores the entry so we can reply:</p>
+        <ul>
+          <li>Smart Living consultation (<code>homeowner-consultation</code>) on <a href="/smart-living/">Smart Living</a>.</li>
+          <li>Builder meeting request (<code>builder-meeting</code>) on <a href="/builder-partners/">Builder Partners</a>.</li>
+        </ul>
+        <p>We use what you submit to respond to that request. Netlify can also email the submission to the notification address configured for the site. A hidden subject line is included so that email can be recognized. The form fields themselves are listed below.</p>
+
+        <h2>Smart Living consultation</h2>
+        <p>The consultation form asks for:</p>
+        <ul>
+          <li>Name, email, phone, and address or town</li>
+          <li>What you are interested in (any of: home theater / media room, whole-home audio, outdoor TV and audio, lighting control, climate control, Wi-Fi and networking, cameras and security readiness, support for an existing system, or not sure yet)</li>
+          <li>Timeline</li>
+          <li>Notes</li>
+          <li>How did you hear about us? (Google search, online ad, social media, friend or family referral, builder / designer / realtor referral, Homearama, or other)</li>
+        </ul>
+
+        <h2>Builder meeting</h2>
+        <p>The builder meeting form asks for:</p>
+        <ul>
+          <li>Name, company, role, email, and phone</li>
+          <li>Homes per year</li>
+          <li>Typical price range or home size</li>
+          <li>Notes (upcoming projects, timing, or questions)</li>
+          <li>How did you hear about us? (Google search, online ad, LinkedIn, referral from another builder or trade partner, Homearama, industry event or association, JackNat reached out, or other)</li>
+        </ul>
+
+        <h2>Visit fields stored with each submission</h2>
+        <p>On the first page of a visit, the site reads these values from the page address when they are present, and leaves them blank when they are not:</p>
+        <ul>
+          <li><code>utm_source</code></li>
+          <li><code>utm_medium</code></li>
+          <li><code>utm_campaign</code></li>
+          <li><code>utm_term</code></li>
+          <li><code>utm_content</code></li>
+          <li><code>gclid</code> (the Google Ads click identifier, when the ad click added one)</li>
+          <li><code>landing_page</code> (the address of the first page in the visit, including its query string and hash, without the contents of the form)</li>
+        </ul>
+        <p>The first values seen in the visit are kept. Later pages do not replace them. They are written into hidden fields and submitted with the form, together with your "How did you hear about us?" answer. They are stored in this browser's <code>sessionStorage</code> and in a first-party session cookie named <code>jacknat_lead</code>. Both last for the browser session and are not given an expiration date beyond that session.</p>
+        <p>A separate <code>sessionStorage</code> entry records whether an advertising conversion event for that submission has already been sent, so a reload of the thank-you page does not send it again.</p>
+
+        <h2>Spam checks</h2>
+        <p>Each form includes a field that is not shown on the page. Submissions that fill it in are rejected. Netlify also runs its own spam filter on submissions. Entries it flags are kept out of the verified submissions list.</p>
+
+        <h2>Google Ads</h2>
+        <p>Every page loads a small script that looks for a Google Ads ID in the site configuration. When a real ID is set, that script loads Google's tag (<code>gtag.js</code>) once on the page. While the ID is still unset, the tag is not requested and no data is sent to Google.</p>
+        <p>When the tag is active, Google may set its own cookies to measure ad clicks. The consultation thank-you page (/smart-living/thank-you/) can send one conversion event to Google Ads after the consultation form is submitted. That event says a consultation form was submitted. It does not include your name, email, phone, address, notes, or the other form fields. Opening that page directly, or reloading it, does not send the event again.</p>
+        <p>The builder thank-you page does not send the consultation conversion. It can send its own conversion event after a builder meeting request, and only when a separate builder conversion label is configured. No conversion value or currency is sent. Hashed-email enhanced conversions are not enabled.</p>
+        <p>The <code>gclid</code> stored with the form is there so a later follow-up can be matched back to the ad click. That matching is not done automatically by this website beyond storing the value on the form submission.</p>
+
+        <h2>Questions</h2>
+        <p>To ask about a submission or this page, use the phone, email, and address published on the <a href="/contact.html">Contact</a> page.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="logo-mark">Jack<span style="color:var(--gold-400)">Nat</span></div>
+          <p>Enterprise systems. Connected homes. Integrated technology.</p>
+        </div>
+        <div>
+          <h3>What we do</h3>
+          <ul>
+            <li><a href="/enterprise.html">Enterprise ERP</a></li>
+            <li><a href="/connected-home.html">Connected Home</a></li>
+            <li><a href="/connected-home-products.html">Smart Living Products</a></li>
+            <li><a href="/services.html">Services</a></li>
+            <li><a href="/smart-living/">Smart Living</a></li>
+            <li><a href="/builder-partners/">Builder Partners</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Company</h3>
+          <ul>
+            <li><a href="/about.html">About</a></li>
+            <li><a href="/contact.html">Contact</a></li>
+            <li><a href="/privacy/">Privacy</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="tel:+16577479755">+1 (657) 747-9755</a></li>
+            <li>4606 Chelsea Meadow Ct<br>La Grange, KY 40031</li>
+            <li>Mon–Fri 9:00 am – 5:00 pm</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 JackNat Consulting, LLC. All rights reserved.</p>
+        <p class="footer-emails">
+          <span>Enterprise ERP &amp; business technology: <a href="mailto:erp@jacknat.com">erp@jacknat.com</a></span>
+          <span>Residential smart living: <a href="mailto:smart.living@jacknat.com">smart.living@jacknat.com</a></span>
+        </p>
+      </div>
+    </div>
+  </footer>
+  <script src="/js/ads-config.js"></script>
+  <script src="/js/campaign.js"></script>
+  <script src="/js/main.js"></script>
+</body>
+</html>

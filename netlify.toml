@@ -1,0 +1,36 @@
+# Static site. Publish the repository root, matching production.
+# The build command is omitted on purpose: this repo has no build,
+# and an empty command here would not add one.
+[build]
+  publish = "."
+
+# Thank-you pages stay out of search indexing.
+[[headers]]
+  for = "/smart-living/thank-you"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/smart-living/thank-you/"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/smart-living/thank-you/index.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/builder-partners/thank-you"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/builder-partners/thank-you/"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/builder-partners/thank-you/index.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

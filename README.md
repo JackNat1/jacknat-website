@@ -2,7 +2,7 @@
 
 Static multi-page marketing website for **JackNat Consulting, LLC**.
 
-**Site root:** this folder (`/workspace/jacknat/site/` locally). Upload its contents to your web root on GoDaddy.
+**Site root:** this folder. Production is Netlify at [jacknat.com](https://jacknat.com). See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). The GoDaddy steps further down are not the current deploy path.
 
 ## Pages
 
