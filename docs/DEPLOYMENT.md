@@ -84,9 +84,11 @@ A local `python3 -m http.server` cannot accept these posts. Use the deploy previ
 
 `js/ads-config.js` holds the conversion ID and the two conversion labels. They ship as named placeholders (`AW-REPLACE_ME`, `REPLACE_ME`). `js/campaign.js` does not load gtag while either value is still a placeholder, and it does not remove the pending token in that case.
 
-After a 2xx form response, the page stores one token for that submission and then opens the thank-you page. The consultation event is sent only from `/smart-living/thank-you/` for `homeowner-consultation`, and only when that label is a real value. `/builder-partners/thank-you/` does not send the consultation conversion. It sends a builder conversion only for `builder-meeting` and only when that label has been replaced.
+After a 2xx form response, the page stores one token with state `pending`, then opens the thank-you page. The consultation event is sent only from `/smart-living/thank-you/` for `homeowner-consultation`, and only when that label is a real value. `/builder-partners/thank-you/` does not send the consultation conversion. It sends a builder conversion only for `builder-meeting` and only when that label has been replaced.
 
-The token is claimed once, when a configured conversion is started, so a reload or the back button does not send a second event. The pending token is removed only after gtag reports the hit was sent (`event_callback` plus an outbound conversion request). A timeout is not treated as success and does not delete the token.
+The event is `gtag('event', 'conversion', { send_to, transaction_id, event_callback })`. `transaction_id` is that submission's token. `event_callback` moves the token to `completed` and removes `pending`. A callback that already completed does not fire again on reload or back navigation. If the callback has not run within about 2 seconds, or `gtag` throws, the token stays `pending` so a later thank-you visit can retry. Google dedupes those retries with `transaction_id`. Nothing is written to storage before the callback except the original `pending` record from the successful form post.
+
+The browser callback only shows that the tag fired. Whether Google Ads recorded the conversion and attributed it has to be checked in Google Ads conversion diagnostics or Tag Assistant.
 
 No conversion value is sent. Enhanced conversions and GA4 are not installed.
 
@@ -108,7 +110,7 @@ Do these in order. Leave the Google Ads campaign **Paused** until conversion tra
 
 - [ ] Test submissions received for `homeowner-consultation` and `builder-meeting` (Verified or reviewed out of Spam).
 - [ ] Both forms notify `smart.living@jacknat.com` only. Customer follow-ups use that address. ERP mail stays on `erp@jacknat.com`.
-- [ ] Google Ads conversion ID and the consultation label are in `js/ads-config.js` (no `REPLACE_ME`). A real thank-you submission sends one conversion and a reload does not send another.
+- [ ] Google Ads conversion ID and the consultation label are in `js/ads-config.js` (no `REPLACE_ME`). The thank-you callback shows the tag fired. Confirm the conversion was recorded and attributed in Google Ads conversion diagnostics or Tag Assistant. A completed token does not fire again on reload.
 - [ ] Award wording "2026 Homearama Best Use of Technology Award Winner" is confirmed, and the privacy page is approved.
 - [ ] This pull request is merged, and production `https://jacknat.com/smart-living/`, `/builder-partners/`, `/privacy/`, and both thank-you URLs are checked.
 - [ ] Google Ads stays **Paused** until the conversion above is active and tested. Then it can be enabled in Google Ads. This repo does not turn the campaign on.

@@ -167,7 +167,7 @@
     var token, payload;
     if (!formName || !FORM_LABELS[formName]) return false;
     token = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
-    payload = JSON.stringify({ form: formName, token: token });
+    payload = JSON.stringify({ form: formName, token: token, state: "pending" });
     try {
       sessionStorage.setItem(PENDING_KEY, payload);
       return true;
@@ -197,129 +197,85 @@
     errorEl.textContent = "";
   }
 
-  // Record an outbound conversion hit. gtag's event_callback also runs on its
-  // own timeout, so a callback alone is not proof the hit was sent.
-  function watchConversionSend(sendTo, onSent) {
-    var idPart = sendTo.split("/")[0].replace(/^AW-/, "");
-    var label = sendTo.split("/")[1] || "";
+  function completedKey(token) {
+    return "jacknat_conversion_completed_" + token;
+  }
 
-    function matches(value) {
-      var text = value == null ? "" : String(value);
-      if (!text || text.indexOf(idPart) === -1) return false;
-      return !label || text.indexOf(label) !== -1;
+  function isCompleted(token) {
+    try {
+      return sessionStorage.getItem(completedKey(token)) === "completed";
+    } catch (err) {
+      return false;
     }
+  }
 
-    if (navigator.sendBeacon && !navigator.__jacknatBeaconWrapped) {
-      var originalBeacon = navigator.sendBeacon.bind(navigator);
-      navigator.sendBeacon = function (url, data) {
-        var queued = originalBeacon(url, data);
-        if (queued && (matches(url) || matches(data))) onSent();
-        return queued;
-      };
-      navigator.__jacknatBeaconWrapped = true;
-    }
-
-    if (window.fetch && !window.__jacknatFetchWrapped) {
-      var originalFetch = window.fetch;
-      window.fetch = function (input, init) {
-        var url = typeof input === "string" ? input : (input && input.url);
-        var pending = originalFetch.apply(this, arguments);
-        if (matches(url)) {
-          pending.then(function (res) {
-            if (res && res.ok) onSent();
-          }, function () {});
-        }
-        return pending;
-      };
-      window.__jacknatFetchWrapped = true;
-    }
-
-    if (window.XMLHttpRequest && !window.__jacknatXhrWrapped) {
-      var originalOpen = XMLHttpRequest.prototype.open;
-      var originalSend = XMLHttpRequest.prototype.send;
-      XMLHttpRequest.prototype.open = function (method, url) {
-        this.__jacknatUrl = url;
-        return originalOpen.apply(this, arguments);
-      };
-      XMLHttpRequest.prototype.send = function () {
-        var xhr = this;
-        if (matches(xhr.__jacknatUrl)) {
-          xhr.addEventListener("load", function () {
-            if (xhr.status >= 200 && xhr.status < 300) onSent();
-          });
-        }
-        return originalSend.apply(this, arguments);
-      };
-      window.__jacknatXhrWrapped = true;
-    }
+  function markCompleted(token) {
+    var current;
+    try {
+      sessionStorage.setItem(completedKey(token), "completed");
+      current = parseJson(sessionStorage.getItem(PENDING_KEY));
+      if (current && current.token === token) sessionStorage.removeItem(PENDING_KEY);
+    } catch (err) {}
   }
 
   function maybeFireConversion() {
     var expected = document.body ? document.body.getAttribute("data-conversion-form") : "";
-    var pending, firedKey, claimKey, settings, label, sendTo, completed, sent, callbackFired;
-    if (!expected || window.__jacknatConversionBusy) return;
+    var pending, settings, label, sendTo, token, settled;
+    if (!expected) return;
     try {
       pending = parseJson(sessionStorage.getItem(PENDING_KEY));
     } catch (err) {
       pending = null;
     }
-    if (!pending || pending.form !== expected || !pending.token) return;
+    if (!pending || pending.state === "completed" || pending.form !== expected || !pending.token) return;
+    if (isCompleted(pending.token)) return;
 
-    firedKey = "jacknat_conversion_fired_" + pending.token;
-    claimKey = "jacknat_conversion_claimed_" + pending.token;
-    try {
-      if (sessionStorage.getItem(firedKey) === "1") return;
-      if (sessionStorage.getItem(claimKey) === "1") return;
-    } catch (err) {
-      return;
-    }
-
-    // Placeholders stay pending. Do not claim the token and do not load gtag.
+    // Placeholders stay pending. Do not load gtag and do not write a completed state.
     settings = adsSettings();
     label = labelForForm(expected, settings);
     if (!isRealAdsId(settings.googleAdsId) || isPlaceholder(label)) return;
-    sendTo = settings.googleAdsId + "/" + label;
 
-    // One shot per successful submission. Reload and back-forward reuse this claim
-    // and do not call gtag again. The pending token itself is removed only after
-    // the hit is actually sent.
-    window.__jacknatConversionBusy = true;
+    // This page load only. Not stored, so a later visit can retry after a timeout.
+    if (window.__jacknatConversionInFlight === pending.token) return;
+    window.__jacknatConversionInFlight = pending.token;
+
+    sendTo = settings.googleAdsId + "/" + label;
+    token = pending.token;
+    settled = false;
+
+    function finishInFlight() {
+      if (window.__jacknatConversionInFlight === token) window.__jacknatConversionInFlight = "";
+    }
+
+    function onDone() {
+      if (settled) return;
+      settled = true;
+      finishInFlight();
+      markCompleted(token);
+    }
+
+    function onTimeout() {
+      if (settled) return;
+      settled = true;
+      finishInFlight();
+      // Leave the pending record in place. transaction_id dedupes a later retry.
+    }
+
     try {
-      sessionStorage.setItem(claimKey, "1");
+      loadGtag(settings.googleAdsId);
+      window.gtag("event", "conversion", {
+        send_to: sendTo,
+        transaction_id: token,
+        event_callback: onDone,
+        // Above this page's 2s limit so Google's own timeout does not mark a missed hit completed.
+        event_timeout: 2500
+      });
     } catch (err) {
-      window.__jacknatConversionBusy = false;
+      onTimeout();
       return;
     }
 
-    completed = false;
-    sent = false;
-    callbackFired = false;
-
-    function markComplete() {
-      if (completed || !sent || !callbackFired) return;
-      completed = true;
-      try {
-        sessionStorage.setItem(firedKey, "1");
-        sessionStorage.removeItem(PENDING_KEY);
-      } catch (err) {}
-    }
-
-    watchConversionSend(sendTo, function () {
-      sent = true;
-      markComplete();
-    });
-
-    loadGtag(settings.googleAdsId);
-    window.gtag("event", "conversion", {
-      send_to: sendTo,
-      event_callback: function () {
-        callbackFired = true;
-        markComplete();
-      }
-    });
-
-    // Timeout is not success. Leave the pending token in place.
-    window.setTimeout(function () {}, 3000);
+    window.setTimeout(onTimeout, 2000);
   }
 
   function submitForm(form) {
