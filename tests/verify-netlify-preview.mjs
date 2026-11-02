@@ -82,10 +82,10 @@ const config = await get("/js/ads-config.js");
 if (!blocked && config.status === 200) {
   if (!config.text.includes('googleAdsId: "AW-18552161836"')) {
     fail("ads-config.js is missing AW-18552161836");
-  } else if (!config.text.includes("REPLACE_ME")) {
-    fail("conversion labels should stay REPLACE_ME until Google Ads provides them");
+  } else if (!config.text.includes('homeownerConsultation: "STqxCNC2z7AdEKyMro5F"') || !config.text.includes('builderMeeting: "IMFyCNO2z7AdEKyMro5F"')) {
+    fail("ads-config.js is missing a conversion label");
   } else {
-    console.log("OK ads-config.js has AW-18552161836 and placeholder labels");
+    console.log("OK ads-config.js has AW-18552161836 and both conversion labels");
   }
 }
 

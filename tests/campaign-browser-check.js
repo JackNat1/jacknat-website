@@ -34,7 +34,8 @@ async function prepareForm(page) {
   if (source.indexOf("transaction_id: token") === -1) fail("conversion event is missing transaction_id");
   const configSource = require("fs").readFileSync("/workspace/js/ads-config.js", "utf8");
   if (configSource.indexOf('googleAdsId: "AW-18552161836"') === -1) fail("ads-config.js is missing AW-18552161836");
-  if (configSource.indexOf('homeownerConsultation: "REPLACE_ME"') === -1) fail("homeowner label should stay a placeholder");
+  if (configSource.indexOf('homeownerConsultation: "STqxCNC2z7AdEKyMro5F"') === -1) fail("homeowner label missing");
+  if (configSource.indexOf('builderMeeting: "IMFyCNO2z7AdEKyMro5F"') === -1) fail("builder label missing");
   if (!errors.length) ok("campaign.js does not wrap fetch, sendBeacon, or XHR");
 
   const browser = await launch();
@@ -112,9 +113,29 @@ async function prepareForm(page) {
           req.respond({ status: 200, contentType: "text/plain", body: "ok" });
         }, 400);
         page.__body = body;
+      } else if (req.url().includes("/__saw_conversion")) {
+        gtagUrls.push(req.url());
+        req.respond({ status: 204, body: "" });
       } else if (req.url().includes("googletagmanager.com/gtag/js")) {
         gtagUrls.push(req.url());
-        req.respond({ status: 200, contentType: "application/javascript", body: "window.__jacknatGtagStub = true;" });
+        req.respond({
+          status: 200,
+          contentType: "application/javascript",
+          body: `
+            (function () {
+              function handle(args) {
+                var list = Array.prototype.slice.call(args);
+                if (list[0] !== "event" || list[1] !== "conversion") return;
+                var params = list[2] || {};
+                fetch("/__saw_conversion?send_to=" + encodeURIComponent(params.send_to || "") + "&id=" + encodeURIComponent(params.transaction_id || ""));
+                if (params.event_callback) params.event_callback();
+              }
+              var queued = window.dataLayer ? window.dataLayer.slice() : [];
+              window.dataLayer = { push: function (item) { handle(item); } };
+              queued.forEach(function (item) { handle(item); });
+            })();
+          `
+        });
       } else req.continue();
     });
     await prepareForm(page);
@@ -124,37 +145,102 @@ async function prepareForm(page) {
       form.requestSubmit();
     });
     await page.waitForFunction(() => location.pathname.indexOf("thank-you") !== -1, { timeout: 4000 });
-    const pending = await page.evaluate(() => sessionStorage.getItem("jacknat_conversion_pending"));
-    console.log("double", posts, pending);
+    for (let i = 0; i < 30 && !gtagUrls.some((url) => url.includes("/__saw_conversion")); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    console.log("double posts", posts);
     if (posts !== 1) fail("expected 1 POST, got " + posts);
     else ok("in-flight guard blocked a duplicate lead");
-    if (!pending || pending.indexOf("homeowner-consultation") === -1) fail("token missing after 2xx");
-    else ok("token stored only after 2xx");
-    const tag = await page.evaluate(() => {
-      const script = document.querySelector('script[src*="googletagmanager.com/gtag/js"]');
-      const calls = (window.dataLayer || []).map((item) => Array.prototype.slice.call(item));
-      return {
-        src: script ? script.src : "",
-        configs: calls.filter((item) => item[0] === "config").map((item) => item[1]),
-        conversions: calls.filter((item) => item[0] === "event" && item[1] === "conversion")
-      };
-    });
-    if (!tag.src.includes("id=AW-18552161836")) fail("real ID did not load gtag config: " + tag.src);
-    if (tag.configs.indexOf("AW-18552161836") === -1) fail("gtag config was not queued");
-    if (tag.conversions.length) fail("placeholder label fired a conversion");
-    else ok("real ID loads gtag config and does not fire a conversion");
-    const still = await page.evaluate(() => sessionStorage.getItem("jacknat_conversion_pending"));
-    await page.reload({ waitUntil: "networkidle0" });
-    const after = await page.evaluate(() => ({
+    const homeownerHits = gtagUrls.filter((url) => url.includes("/__saw_conversion"));
+    console.log("homeowner hits", homeownerHits);
+    if (homeownerHits.length !== 1) fail("homeowner thank-you fired " + homeownerHits.length + " conversions");
+    const homeownerHit = new URL(homeownerHits[0]);
+    const homeownerId = homeownerHit.searchParams.get("id");
+    if (homeownerHit.searchParams.get("send_to") !== "AW-18552161836/STqxCNC2z7AdEKyMro5F") {
+      fail("homeowner send_to " + homeownerHit.searchParams.get("send_to"));
+    }
+    if (homeownerHits[0].includes("IMFyCNO2z7AdEKyMro5F")) fail("homeowner page fired the builder label");
+    const homeownerState = await page.evaluate((id) => ({
       pending: sessionStorage.getItem("jacknat_conversion_pending"),
-      completed: Object.keys(sessionStorage).filter((k) => k.indexOf("jacknat_conversion_completed_") === 0),
-      conversions: (window.dataLayer || []).map((item) => Array.prototype.slice.call(item)).filter((item) => item[0] === "event" && item[1] === "conversion")
-    }));
-    if (after.pending !== still) fail("placeholder label removed the pending token");
-    if (!after.pending.includes('"state":"pending"')) fail("pending state was not recorded");
-    if (after.completed.length || after.conversions.length) fail("placeholder label completed or fired on reload");
-    else ok("placeholder label keeps the pending token");
+      completed: sessionStorage.getItem("jacknat_conversion_completed_" + id)
+    }), homeownerId);
+    if (homeownerState.pending) fail("homeowner callback left the token pending");
+    if (homeownerState.completed !== "completed") fail("homeowner callback did not complete the token");
+    await page.reload({ waitUntil: "networkidle0" });
+    await new Promise((r) => setTimeout(r, 300));
+    if (gtagUrls.filter((url) => url.includes("/__saw_conversion")).length !== 1) {
+      fail("completed homeowner token fired again on reload");
+    } else ok("homeowner thank-you fires only its label once");
     if (!gtagUrls.some((url) => url.includes("id=AW-18552161836"))) fail("gtag.js was not requested for AW-18552161836");
+    await page.close();
+  }
+
+  // Builder thank-you fires only the builder label. The other page ignores that token.
+  {
+    const page = await browser.newPage();
+    const seen = [];
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      const url = req.url();
+      if (url.includes("/__saw_conversion")) {
+        seen.push(url);
+        req.respond({ status: 204, body: "" });
+        return;
+      }
+      if (url.includes("googletagmanager.com/gtag/js")) {
+        req.respond({
+          status: 200,
+          contentType: "application/javascript",
+          body: `
+            (function () {
+              function handle(args) {
+                var list = Array.prototype.slice.call(args);
+                if (list[0] !== "event" || list[1] !== "conversion") return;
+                var params = list[2] || {};
+                fetch("/__saw_conversion?send_to=" + encodeURIComponent(params.send_to || "") + "&id=" + encodeURIComponent(params.transaction_id || ""));
+                if (params.event_callback) params.event_callback();
+              }
+              var queued = window.dataLayer ? window.dataLayer.slice() : [];
+              window.dataLayer = { push: function (item) { handle(item); } };
+              queued.forEach(function (item) { handle(item); });
+            })();
+          `
+        });
+        return;
+      }
+      req.continue();
+    });
+    await page.goto(BASE + "/smart-living/thank-you/", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      sessionStorage.setItem("jacknat_conversion_pending", JSON.stringify({ form: "builder-meeting", token: "builder-on-homeowner", state: "pending" }));
+    });
+    await page.reload({ waitUntil: "networkidle0" });
+    await new Promise((r) => setTimeout(r, 400));
+    if (seen.length) fail("homeowner thank-you fired a builder token: " + seen.join(" "));
+    else ok("homeowner thank-you ignores a builder token");
+
+    await page.evaluate(() => {
+      sessionStorage.setItem("jacknat_conversion_pending", JSON.stringify({ form: "builder-meeting", token: "builder-token", state: "pending" }));
+    });
+    await page.goto(BASE + "/builder-partners/thank-you/", { waitUntil: "networkidle0" });
+    for (let i = 0; i < 30 && seen.length < 1; i++) await new Promise((r) => setTimeout(r, 100));
+    console.log("builder hits", seen);
+    if (seen.length !== 1) fail("builder thank-you fired " + seen.length + " conversions");
+    const builderHit = new URL(seen[0]);
+    if (builderHit.searchParams.get("send_to") !== "AW-18552161836/IMFyCNO2z7AdEKyMro5F") {
+      fail("builder send_to " + builderHit.searchParams.get("send_to"));
+    }
+    if (builderHit.searchParams.get("id") !== "builder-token") fail("builder transaction_id " + builderHit.searchParams.get("id"));
+    if (seen[0].includes("STqxCNC2z7AdEKyMro5F")) fail("builder page fired the homeowner label");
+    const builderState = await page.evaluate(() => ({
+      pending: sessionStorage.getItem("jacknat_conversion_pending"),
+      completed: sessionStorage.getItem("jacknat_conversion_completed_builder-token")
+    }));
+    if (builderState.pending || builderState.completed !== "completed") fail("builder token was not completed once");
+    await page.reload({ waitUntil: "networkidle0" });
+    await new Promise((r) => setTimeout(r, 300));
+    if (seen.length !== 1) fail("completed builder token fired again");
+    else ok("builder thank-you fires only its label once");
     await page.close();
   }
 
