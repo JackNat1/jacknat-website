@@ -476,20 +476,57 @@ async function prepareForm(page) {
     let body = new URLSearchParams(posts[0] || "");
     console.log("direct homeowner landing_page", body.get("landing_page"));
     if (body.get("landing_page") !== directHome) fail("direct homeowner landing_page " + body.get("landing_page"));
+    else if (body.get("form_page") !== directHome) fail("direct homeowner form_page " + body.get("form_page"));
     else if (body.get("utm_source") || body.get("gclid")) fail("direct homeowner invented campaign params");
+    else if (body.get("bot-field")) fail("direct homeowner honeypot was not empty");
     else if (body.get("form-name") !== "homeowner-consultation") fail("homeowner form-name missing from POST");
-    else ok("direct homeowner POST includes landing_page without campaign params");
+    else ok("direct homeowner POST includes landing_page and form_page, honeypot empty");
 
     const tagged = "?utm_source=google&utm_medium=cpc&utm_campaign=test&gclid=TEST123";
     await resetAndGo(BASE + "/smart-living/" + tagged);
+    const stages = await page.evaluate(() => {
+      const form = document.querySelector("form");
+      const read = (name) => (form.querySelector('[name="' + name + '"]') || {}).value || "";
+      return {
+        debug: JSON.parse(sessionStorage.getItem("jacknat_attr_debug") || "[]"),
+        fields: {
+          landing_page: read("landing_page"),
+          form_page: read("form_page"),
+          utm_source: read("utm_source"),
+          utm_medium: read("utm_medium"),
+          utm_campaign: read("utm_campaign"),
+          gclid: read("gclid")
+        }
+      };
+    });
+    const urlStage = stages.debug.filter((row) => row.stage === "url").pop();
+    const storageStage = stages.debug.filter((row) => row.stage === "storage").pop();
+    const fieldStage = stages.debug.filter((row) => row.stage === "fields").pop();
+    console.log("stages", JSON.stringify({ url: urlStage, storage: storageStage, fields: fieldStage }, null, 2));
+    if (!urlStage || urlStage.search.indexOf("utm_medium=cpc") === -1 || urlStage.parsed.utm_medium !== "cpc" || urlStage.parsed.gclid !== "TEST123") {
+      fail("URL parse dropped the query " + JSON.stringify(urlStage));
+    }
+    if (!storageStage || storageStage.landing_page.indexOf("utm_medium=cpc") === -1 || storageStage.gclid !== "TEST123") {
+      fail("storage dropped the query " + JSON.stringify(storageStage));
+    }
+    if (!fieldStage || fieldStage.landing_page.indexOf("utm_medium=cpc") === -1 || stages.fields.gclid !== "TEST123" || stages.fields.utm_campaign !== "test") {
+      fail("hidden fields empty or truncated after load " + JSON.stringify(stages.fields));
+    }
     await submitHomeowner();
     body = new URLSearchParams(posts[0] || "");
+    const raw = posts[0] || "";
+    const landingEncoded = raw.split("&").filter((part) => part.indexOf("landing_page=") === 0)[0] || "";
     if (body.get("utm_source") !== "google" || body.get("utm_medium") !== "cpc" || body.get("utm_campaign") !== "test" || body.get("gclid") !== "TEST123") {
-      fail("tagged homeowner params " + posts[0]);
-    }
-    if (!body.get("landing_page") || body.get("landing_page").indexOf("gclid=TEST123") === -1) {
-      fail("tagged homeowner landing_page " + body.get("landing_page"));
-    } else ok("tagged homeowner POST includes landing_page and campaign params");
+      fail("POST parse dropped campaign params " + raw);
+    } else if (!body.get("landing_page") || body.get("landing_page").indexOf("utm_medium=cpc") === -1 || body.get("landing_page").indexOf("gclid=TEST123") === -1) {
+      fail("POST landing_page lost the query " + body.get("landing_page"));
+    } else if (landingEncoded.indexOf("%26") === -1) {
+      fail("landing_page was not percent-encoded in the raw body " + landingEncoded);
+    } else if (body.get("form_page") !== BASE + "/smart-living/" + tagged) {
+      fail("form_page " + body.get("form_page"));
+    } else if (body.get("bot-field")) {
+      fail("honeypot was filled");
+    } else ok("tagged homeowner keeps the full query through parse, storage, fields, and encoded POST");
 
     const directBuilder = BASE + "/builder-partners/";
     await resetAndGo(directBuilder);
@@ -502,9 +539,19 @@ async function prepareForm(page) {
     await resetAndGo(BASE + "/builder-partners/" + tagged);
     await submitBuilder();
     body = new URLSearchParams(posts[0] || "");
-    if (body.get("gclid") !== "TEST123" || body.get("utm_source") !== "google" || !String(body.get("landing_page")).includes("gclid=TEST123")) {
-      fail("tagged builder payload " + posts[0]);
-    } else ok("tagged builder POST includes landing_page and campaign params");
+    const builderRaw = posts[0] || "";
+    const builderLanding = (builderRaw.split("&").filter((part) => part.indexOf("landing_page=") === 0)[0] || "");
+    if (body.get("utm_source") !== "google" || body.get("utm_medium") !== "cpc" || body.get("utm_campaign") !== "test" || body.get("gclid") !== "TEST123") {
+      fail("tagged builder params dropped " + builderRaw);
+    } else if (!String(body.get("landing_page")).includes("utm_medium=cpc") || !String(body.get("landing_page")).includes("gclid=TEST123")) {
+      fail("tagged builder landing_page cut " + body.get("landing_page"));
+    } else if (builderLanding.indexOf("%26") === -1) {
+      fail("builder landing_page was not encoded " + builderLanding);
+    } else if (body.get("form_page") !== BASE + "/builder-partners/" + tagged) {
+      fail("builder form_page " + body.get("form_page"));
+    } else if (body.get("bot-field")) {
+      fail("builder honeypot was filled");
+    } else ok("tagged builder POST keeps every campaign param and encodes landing_page");
 
     await resetAndGo(BASE + "/" + tagged);
     await page.goto(BASE + "/builder-partners/", { waitUntil: "networkidle0" });
@@ -512,8 +559,9 @@ async function prepareForm(page) {
     await submitBuilder();
     body = new URLSearchParams(posts[0] || "");
     if (body.get("landing_page") !== BASE + "/" + tagged) fail("navigation replaced landing_page " + body.get("landing_page"));
-    else if (body.get("gclid") !== "TEST123") fail("navigation dropped gclid");
-    else ok("first-touch landing_page survives navigation to the builder form");
+    else if (body.get("gclid") !== "TEST123" || body.get("utm_medium") !== "cpc") fail("navigation changed original campaign params");
+    else if (body.get("form_page") !== BASE + "/builder-partners/") fail("form_page should be the builder page " + body.get("form_page"));
+    else ok("first-touch landing_page and campaign params survive; form_page is the submit page");
 
     await page.goto(BASE + "/smart-living/?gclid=NEW456&utm_source=newsletter", { waitUntil: "networkidle0" });
     const updated = await page.evaluate(() => {
@@ -521,12 +569,14 @@ async function prepareForm(page) {
       return {
         landing: form.querySelector('[name="landing_page"]').value,
         gclid: form.querySelector('[name="gclid"]').value,
-        source: form.querySelector('[name="utm_source"]').value
+        source: form.querySelector('[name="utm_source"]').value,
+        medium: form.querySelector('[name="utm_medium"]').value
       };
     });
     if (updated.landing !== BASE + "/" + tagged) fail("new visit overwrote landing_page " + updated.landing);
-    else if (updated.gclid !== "NEW456" || updated.source !== "newsletter") fail("new tagged visit did not update gclid/utm " + JSON.stringify(updated));
-    else ok("a new tagged visit updates gclid and utm without replacing landing_page");
+    else if (updated.gclid !== "TEST123" || updated.source !== "google" || updated.medium !== "cpc") {
+      fail("new visit overwrote original campaign params " + JSON.stringify(updated));
+    } else ok("a later tagged URL does not replace first-touch landing_page or campaign params");
 
     await page.close();
   }

@@ -40,11 +40,37 @@ Two static forms are registered by Netlify at deploy time:
 | `homeowner-consultation` | `/smart-living/` | `/smart-living/thank-you/` | `smart.living@jacknat.com` only |
 | `builder-meeting` | `/builder-partners/` | `/builder-partners/thank-you/` | `smart.living@jacknat.com` only |
 
-Each form posts with `netlify-honeypot="bot-field"`. The static HTML includes hidden inputs named `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `gclid`, and `landing_page` so Netlify's form detection registers them. `js/campaign.js` fills those inputs on load and also writes the same values into the `fetch` body. A visible "How did you hear about us?" field is included.
+Each form posts with `netlify-honeypot="bot-field"`. The static HTML includes hidden inputs named `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `gclid`, `landing_page`, and `form_page` so Netlify's form detection registers them. `js/campaign.js` fills those inputs on `DOMContentLoaded` (and immediately if the document is already parsed) and again immediately before `fetch`. The same values are written into the POST body with `URLSearchParams`, so `&` inside `landing_page` is sent as `%26`. A visible "How did you hear about us?" field is included. The honeypot `bot-field` is submitted empty for a real visitor.
 
-Attribution rule: `landing_page` is the first page URL (origin, path, and query, including campaign parameters when the first page had them). It is stored even when there is no `utm` or `gclid`, and it is not replaced. `utm_*` and `gclid` are saved when present. A later URL that carries a new `gclid` or `utm` parameter updates those keys and leaves `landing_page` alone. The record is kept in `sessionStorage` and in `localStorage` for 90 days.
+Field rules:
 
-On the f7213d3 preview, every attribution field arrived blank. Netlify removes `data-netlify` from the published form after it detects the form. The script only filled and AJAX-submitted forms that still had that attribute, so the browser fell through to a normal POST of the static `value=""`. Netlify still showed the fields, because they were in the HTML, with empty values. `landing_page` was never copied into the request body. The fetch path now selects the forms by `data-conversion-form` and sets the attribution fields on the POST body itself.
+| Field | Meaning |
+|---|---|
+| `landing_page` | First page entered, including the full original query. Kept for the first touch. Not replaced. Saved even with no campaign parameters. |
+| `utm_*`, `gclid` | Taken from that original tagged arrival and kept unchanged. A later ad click does not overwrite them. |
+| `form_page` | Page that submitted the lead (`/smart-living/` or `/builder-partners/`, as a full URL). Set at submit time, not from the first page. |
+
+There is no separate `last_touch` field. `form_page` is the submission page. Campaign parameters stay first-touch so a builder lead who started on a tagged `/smart-living/` URL still shows that arrival, and `form_page` shows that the form they sent was `/builder-partners/`.
+
+Storage, and how to clear it before an isolated test:
+
+| Store | Key | What it holds |
+|---|---|---|
+| `sessionStorage` | `jacknat_lead_attribution` | First-touch `landing_page`, `utm_*`, `gclid`, and `savedAt`. Expires after 90 days. |
+| `localStorage` | `jacknat_lead_attribution` | The same record, so a later tab in that browser still has it. |
+| `sessionStorage` | `jacknat_attr_debug` | Stage log only (`url`, `storage`, `fields`, `post`). Not submitted. |
+| Cookie | `jacknat_lead` | No longer written. Clear it if an older preview set it. |
+
+```js
+sessionStorage.removeItem("jacknat_lead_attribution");
+localStorage.removeItem("jacknat_lead_attribution");
+sessionStorage.removeItem("jacknat_attr_debug");
+document.cookie = "jacknat_lead=; Path=/; Max-Age=0";
+```
+
+On the f7213d3 preview, every attribution field arrived blank. Netlify removes `data-netlify` from the published form after it detects the form. The script only filled and AJAX-submitted forms that still had that attribute, so the browser fell through to a normal POST of the static `value=""`. The 2b2907a retest did use `fetch`, and one builder `landing_page` was cut at the first `&` while only `utm_source` was stored. The script now records each stage in `jacknat_attr_debug` (URL parse, storage, hidden fields, POST body) so a preview can show which stage dropped the query. Local checks of those four stages keep the full query, and the raw POST encodes `&` as `%26`.
+
+Spam: repeat preview submissions landed in Netlify's Spam list with an empty honeypot. An empty honeypot is correct. Netlify drops honeypot hits before that list; Akismet puts repeated, similar test entries from one address into Spam. The POST sends `Content-Type: application/x-www-form-urlencoded` only, includes `bot-field` as an empty value, and does not add a bot header. That shape is what a normal browser form sends. Spacing out tests and using a normal sentence in Notes avoids most of those flags. Do not put a value in `bot-field`.
 
 With JavaScript, the form is sent with `fetch` as `application/x-www-form-urlencoded` to `/`, including `form-name` and the honeypot field. The submit button is disabled and an in-flight flag is set for that request. A second click does not send another lead. The one-time conversion token is stored only after a 2xx response, and the browser then goes to the thank-you page. A network failure or any non-2xx response shows an inline error, turns the button back on, and leaves every typed field as it was. Without JavaScript, the browser uses the form's normal POST and `action` (the thank-you URL).
 

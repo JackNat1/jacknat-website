@@ -4,6 +4,7 @@
   var TRACK_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid"];
   var ALL_KEYS = TRACK_KEYS.concat(["landing_page"]);
   var STORAGE_KEY = "jacknat_lead_attribution";
+  var DEBUG_KEY = "jacknat_attr_debug";
   var PENDING_KEY = "jacknat_conversion_pending";
   // Keep first-touch landing_page, and any utm/gclid updates, for 90 days.
   var ATTR_TTL_MS = 90 * 24 * 60 * 60 * 1000;
@@ -21,15 +22,24 @@
     }
   }
 
-  function currentLandingUrl() {
-    return location.origin + location.pathname + location.search;
+  function pageUrl() {
+    // href includes the query. Drop only the hash. Do not rebuild from
+    // pathname alone, or a tagged arrival loses ?utm_...&gclid=...
+    return String(location.href || "").split("#")[0];
   }
 
-  function readUrlTracking() {
-    var params = new URLSearchParams(location.search);
+  function parsedSearch() {
+    var url;
+    var params;
     var values = {};
     var any = false;
     var i, key, value;
+    try {
+      url = new URL(location.href);
+      params = url.searchParams;
+    } catch (err) {
+      params = new URLSearchParams(location.search || "");
+    }
     for (i = 0; i < TRACK_KEYS.length; i++) {
       key = TRACK_KEYS[i];
       value = params.get(key);
@@ -38,7 +48,7 @@
         any = true;
       }
     }
-    return { any: any, values: values };
+    return { any: any, values: values, href: location.href, search: location.search || "" };
   }
 
   function freshRecord(raw) {
@@ -81,26 +91,50 @@
     } catch (err) {}
   }
 
-  // landing_page is the first page of the visit (origin, path, and query) and is
-  // not replaced. utm_* and gclid are kept as well. A later URL that itself
-  // carries a gclid or utm parameter updates those keys from that URL and does
-  // not change landing_page. Records expire after 90 days.
+  function recordDebug(stage, detail) {
+    var entry = { stage: stage, at: Date.now() };
+    var key;
+    for (key in detail) {
+      if (Object.prototype.hasOwnProperty.call(detail, key)) entry[key] = detail[key];
+    }
+    var log = [];
+    try {
+      log = parseJson(sessionStorage.getItem(DEBUG_KEY)) || [];
+    } catch (err) {
+      log = [];
+    }
+    if (!log || !log.length) log = [];
+    log.push(entry);
+    if (log.length > 40) log = log.slice(log.length - 40);
+    try {
+      sessionStorage.setItem(DEBUG_KEY, JSON.stringify(log));
+    } catch (err) {}
+    window.JACKNAT_ATTR_DEBUG = log;
+  }
+
+  // landing_page and utm_*/gclid are first-touch. Once a value is stored it is
+  // not replaced, including by a later tagged URL. form_page is not stored here.
   function captureAttribution() {
     var stored = readStored() || {};
-    var incoming = readUrlTracking();
+    var incoming = parsedSearch();
     var changed = !stored.landing_page;
     var i, key;
 
-    if (!stored.landing_page) stored.landing_page = currentLandingUrl();
+    recordDebug("url", {
+      href: incoming.href,
+      search: incoming.search,
+      parsed: incoming.values,
+      pageUrl: pageUrl()
+    });
+
+    if (!stored.landing_page) stored.landing_page = pageUrl();
 
     if (incoming.any) {
       for (i = 0; i < TRACK_KEYS.length; i++) {
         key = TRACK_KEYS[i];
-        if (!incoming.values[key]) continue;
-        if (stored[key] !== incoming.values[key]) {
-          stored[key] = incoming.values[key];
-          changed = true;
-        }
+        if (stored[key] || !incoming.values[key]) continue;
+        stored[key] = incoming.values[key];
+        changed = true;
       }
     }
 
@@ -108,6 +142,15 @@
       stored.savedAt = Date.now();
       writeStore(stored);
     }
+    recordDebug("storage", {
+      landing_page: stored.landing_page || "",
+      utm_source: stored.utm_source || "",
+      utm_medium: stored.utm_medium || "",
+      utm_campaign: stored.utm_campaign || "",
+      utm_term: stored.utm_term || "",
+      utm_content: stored.utm_content || "",
+      gclid: stored.gclid || ""
+    });
     return stored;
   }
 
@@ -123,32 +166,66 @@
     return !!FORM_LABELS[marker];
   }
 
+  function setNamed(form, name, value) {
+    var input = form.querySelector('input[name="' + name + '"]');
+    if (!input) return "";
+    input.value = value || "";
+    return input.value;
+  }
+
   function fillForms(stored) {
     var forms = campaignForms();
-    var f, i, key, input;
+    var here = pageUrl();
+    var f, i, key, seen;
+    stored = stored || {};
     for (f = 0; f < forms.length; f++) {
+      seen = {};
       for (i = 0; i < ALL_KEYS.length; i++) {
         key = ALL_KEYS[i];
-        input = forms[f].querySelector('input[name="' + key + '"]');
-        if (!input) continue;
-        input.value = stored[key] || "";
+        seen[key] = setNamed(forms[f], key, stored[key] || "");
       }
+      seen.form_page = setNamed(forms[f], "form_page", here);
+      recordDebug("fields", seen);
     }
   }
 
   function encodeForm(form, stored) {
     var params = new URLSearchParams();
     var data = new FormData(form);
-    var i, key;
+    var skip = { "bot-field": true };
+    var honeypot = "";
+    var honeypotInput = form.querySelector('input[name="bot-field"]');
+    var i, key, raw, parsed;
+    stored = stored || {};
+    for (i = 0; i < ALL_KEYS.length; i++) skip[ALL_KEYS[i]] = true;
+    skip.form_page = true;
+
     data.forEach(function (value, name) {
+      if (skip[name]) return;
       params.append(name, value);
     });
     for (i = 0; i < ALL_KEYS.length; i++) {
       key = ALL_KEYS[i];
-      params.set(key, (stored && stored[key]) || "");
+      params.set(key, stored[key] || "");
     }
-    if (!params.get("landing_page")) params.set("landing_page", currentLandingUrl());
-    return params.toString();
+    if (!params.get("landing_page")) params.set("landing_page", pageUrl());
+    params.set("form_page", pageUrl());
+    honeypot = honeypotInput ? honeypotInput.value : "";
+    params.set("bot-field", honeypot);
+
+    raw = params.toString();
+    parsed = new URLSearchParams(raw);
+    recordDebug("post", {
+      landing_page: parsed.get("landing_page") || "",
+      form_page: parsed.get("form_page") || "",
+      utm_source: parsed.get("utm_source") || "",
+      utm_medium: parsed.get("utm_medium") || "",
+      utm_campaign: parsed.get("utm_campaign") || "",
+      gclid: parsed.get("gclid") || "",
+      bot_field: parsed.get("bot-field") || "",
+      raw_has_bare_amp_in_landing: /(?:^|&)landing_page=[^&]*&utm_/.test(raw) && raw.indexOf("landing_page=") !== -1 && raw.indexOf("%26") === -1
+    });
+    return raw;
   }
 
   function adsSettings() {
@@ -314,9 +391,9 @@
     try {
       stored = captureAttribution();
     } catch (err) {
-      stored = { landing_page: currentLandingUrl() };
+      stored = { landing_page: pageUrl() };
     }
-    if (!stored.landing_page) stored.landing_page = currentLandingUrl();
+    if (!stored.landing_page) stored.landing_page = pageUrl();
     fillForms(stored);
     // Write attribution into the POST body itself. Netlify removes
     // data-netlify from the published form, and a body built only from
@@ -355,18 +432,25 @@
     submitForm(form);
   });
 
-  try {
-    fillForms(captureAttribution());
-  } catch (err) {}
+  function bootAttribution() {
+    try {
+      fillForms(captureAttribution());
+    } catch (err) {}
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootAttribution);
+  } else {
+    bootAttribution();
+    document.addEventListener("DOMContentLoaded", bootAttribution);
+  }
 
   if (isRealAdsId(adsSettings().googleAdsId)) {
     loadGtag(adsSettings().googleAdsId);
   }
   maybeFireConversion();
   window.addEventListener("pageshow", function (event) {
-    try {
-      fillForms(captureAttribution());
-    } catch (err) {}
+    bootAttribution();
     if (event.persisted) maybeFireConversion();
   });
 })();
