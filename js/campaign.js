@@ -4,8 +4,9 @@
   var TRACK_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid"];
   var ALL_KEYS = TRACK_KEYS.concat(["landing_page"]);
   var STORAGE_KEY = "jacknat_lead_attribution";
-  var COOKIE_NAME = "jacknat_lead";
   var PENDING_KEY = "jacknat_conversion_pending";
+  // Keep first-touch landing_page, and any utm/gclid updates, for 90 days.
+  var ATTR_TTL_MS = 90 * 24 * 60 * 60 * 1000;
   var FORM_LABELS = {
     "homeowner-consultation": "homeownerConsultation",
     "builder-meeting": "builderMeeting"
@@ -20,97 +21,110 @@
     }
   }
 
-  function readSession() {
-    try {
-      return parseJson(sessionStorage.getItem(STORAGE_KEY));
-    } catch (err) {
-      return null;
-    }
+  function currentLandingUrl() {
+    return location.origin + location.pathname + location.search;
   }
 
-  function readCookie() {
-    var parts = document.cookie ? document.cookie.split("; ") : [];
-    var i, idx, name, value;
-    for (i = 0; i < parts.length; i++) {
-      idx = parts[i].indexOf("=");
-      if (idx === -1) continue;
-      name = parts[i].slice(0, idx);
-      if (name !== COOKIE_NAME) continue;
-      value = parts[i].slice(idx + 1);
-      try {
-        return parseJson(decodeURIComponent(value));
-      } catch (err) {
-        return null;
+  function readUrlTracking() {
+    var params = new URLSearchParams(location.search);
+    var values = {};
+    var any = false;
+    var i, key, value;
+    for (i = 0; i < TRACK_KEYS.length; i++) {
+      key = TRACK_KEYS[i];
+      value = params.get(key);
+      if (value) {
+        values[key] = value;
+        any = true;
       }
     }
-    return null;
+    return { any: any, values: values };
   }
 
-  function pickKnown(source) {
+  function freshRecord(raw) {
+    var data = parseJson(raw);
     var out = {};
     var i, key;
-    if (!source) return out;
+    if (!data || typeof data.savedAt !== "number") return null;
+    if (Date.now() - data.savedAt > ATTR_TTL_MS) return null;
     for (i = 0; i < ALL_KEYS.length; i++) {
       key = ALL_KEYS[i];
-      if (typeof source[key] === "string" && source[key]) out[key] = source[key];
+      if (typeof data[key] === "string" && data[key]) out[key] = data[key];
     }
+    if (!out.landing_page) return null;
+    out.savedAt = data.savedAt;
     return out;
+  }
+
+  function readStored() {
+    var fromSession = null;
+    var fromLocal = null;
+    try {
+      fromSession = freshRecord(sessionStorage.getItem(STORAGE_KEY));
+    } catch (err) {}
+    try {
+      fromLocal = freshRecord(localStorage.getItem(STORAGE_KEY));
+    } catch (err) {}
+    if (fromSession && fromLocal) {
+      return fromSession.savedAt >= fromLocal.savedAt ? fromSession : fromLocal;
+    }
+    return fromSession || fromLocal;
   }
 
   function writeStore(data) {
     var json = JSON.stringify(data);
-    var secure = location.protocol === "https:" ? "; Secure" : "";
     try {
       sessionStorage.setItem(STORAGE_KEY, json);
     } catch (err) {}
     try {
-      document.cookie = COOKIE_NAME + "=" + encodeURIComponent(json) + "; Path=/; SameSite=Lax" + secure;
+      localStorage.setItem(STORAGE_KEY, json);
     } catch (err) {}
   }
 
-  function urlHasTracking() {
-    var params = new URLSearchParams(location.search);
-    var i;
-    for (i = 0; i < TRACK_KEYS.length; i++) {
-      if (params.get(TRACK_KEYS[i])) return true;
-    }
-    return false;
-  }
-
+  // landing_page is the first page of the visit (origin, path, and query) and is
+  // not replaced. utm_* and gclid are kept as well. A later URL that itself
+  // carries a gclid or utm parameter updates those keys from that URL and does
+  // not change landing_page. Records expire after 90 days.
   function captureAttribution() {
-    var sessionData = pickKnown(readSession());
-    var stored, params, i, key, value;
+    var stored = readStored() || {};
+    var incoming = readUrlTracking();
+    var changed = !stored.landing_page;
+    var i, key;
 
-    // Already captured in this tab. Later pages must not overwrite first touch.
-    if (sessionData.landing_page) {
-      writeStore(sessionData);
-      return sessionData;
-    }
+    if (!stored.landing_page) stored.landing_page = currentLandingUrl();
 
-    // New tab with no ad parameters: restore the session cookie if this browser
-    // session already recorded a landing. A URL that carries tracking starts fresh.
-    if (!urlHasTracking()) {
-      stored = pickKnown(readCookie());
-      if (stored.landing_page) {
-        writeStore(stored);
-        return stored;
+    if (incoming.any) {
+      for (i = 0; i < TRACK_KEYS.length; i++) {
+        key = TRACK_KEYS[i];
+        if (!incoming.values[key]) continue;
+        if (stored[key] !== incoming.values[key]) {
+          stored[key] = incoming.values[key];
+          changed = true;
+        }
       }
     }
 
-    stored = {};
-    params = new URLSearchParams(location.search);
-    for (i = 0; i < TRACK_KEYS.length; i++) {
-      key = TRACK_KEYS[i];
-      value = params.get(key);
-      if (value) stored[key] = value;
+    if (changed || !stored.savedAt) {
+      stored.savedAt = Date.now();
+      writeStore(stored);
     }
-    stored.landing_page = location.origin + location.pathname + location.search + location.hash;
-    writeStore(stored);
     return stored;
   }
 
+  function campaignForms() {
+    return document.querySelectorAll(
+      "form[data-conversion-form='homeowner-consultation'], form[data-conversion-form='builder-meeting']"
+    );
+  }
+
+  function isCampaignForm(form) {
+    if (!form || !form.getAttribute) return false;
+    var marker = form.getAttribute("data-conversion-form") || form.getAttribute("name") || "";
+    return !!FORM_LABELS[marker];
+  }
+
   function fillForms(stored) {
-    var forms = document.querySelectorAll("form[data-netlify='true']");
+    var forms = campaignForms();
     var f, i, key, input;
     for (f = 0; f < forms.length; f++) {
       for (i = 0; i < ALL_KEYS.length; i++) {
@@ -120,6 +134,21 @@
         input.value = stored[key] || "";
       }
     }
+  }
+
+  function encodeForm(form, stored) {
+    var params = new URLSearchParams();
+    var data = new FormData(form);
+    var i, key;
+    data.forEach(function (value, name) {
+      params.append(name, value);
+    });
+    for (i = 0; i < ALL_KEYS.length; i++) {
+      key = ALL_KEYS[i];
+      params.set(key, (stored && stored[key]) || "");
+    }
+    if (!params.get("landing_page")) params.set("landing_page", currentLandingUrl());
+    return params.toString();
   }
 
   function adsSettings() {
@@ -280,13 +309,19 @@
   }
 
   function submitForm(form) {
-    var body;
+    var stored, body;
     hideFormError(form);
     try {
-      fillForms(captureAttribution());
-    } catch (err) {}
-
-    body = new URLSearchParams(new FormData(form)).toString();
+      stored = captureAttribution();
+    } catch (err) {
+      stored = { landing_page: currentLandingUrl() };
+    }
+    if (!stored.landing_page) stored.landing_page = currentLandingUrl();
+    fillForms(stored);
+    // Write attribution into the POST body itself. Netlify removes
+    // data-netlify from the published form, and a body built only from
+    // inputs that were never filled submits those fields blank.
+    body = encodeForm(form, stored);
 
     // Netlify registers the AJAX post from the site root when form-name is present.
     // The action attribute remains the no-JS success URL.
@@ -309,7 +344,7 @@
   document.addEventListener("submit", function (event) {
     var form = event.target;
     var button;
-    if (!form || !form.getAttribute || form.getAttribute("data-netlify") !== "true") return;
+    if (!isCampaignForm(form)) return;
     // No-JS fallback: without fetch, let the browser POST to the thank-you action.
     if (!window.fetch || !window.FormData || !window.URLSearchParams) return;
     event.preventDefault();
@@ -329,6 +364,9 @@
   }
   maybeFireConversion();
   window.addEventListener("pageshow", function (event) {
+    try {
+      fillForms(captureAttribution());
+    } catch (err) {}
     if (event.persisted) maybeFireConversion();
   });
 })();

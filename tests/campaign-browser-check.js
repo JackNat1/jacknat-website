@@ -425,6 +425,112 @@ async function prepareForm(page) {
     await page.close();
   }
 
+  // Attribution is in the POST body for a direct visit and a tagged URL, on both forms.
+  {
+    const page = await browser.newPage();
+    const posts = [];
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      if (req.method() === "POST") {
+        posts.push(req.postData() || "");
+        req.respond({ status: 200, contentType: "text/plain", body: "ok" });
+      } else if (req.url().includes("googletagmanager.com/gtag/js")) {
+        req.respond({ status: 200, contentType: "application/javascript", body: "window.__jacknatGtagStub = true;" });
+      } else req.continue();
+    });
+
+    async function resetAndGo(url) {
+      posts.length = 0;
+      const injected = await page.evaluateOnNewDocument(() => {
+        sessionStorage.removeItem("jacknat_lead_attribution");
+        localStorage.removeItem("jacknat_lead_attribution");
+      });
+      await page.goto(url, { waitUntil: "networkidle0" });
+      if (injected && injected.identifier) {
+        await page.removeScriptToEvaluateOnNewDocument(injected.identifier);
+      }
+    }
+
+    async function submitHomeowner() {
+      await page.type("#hl-name", "Ada Homeowner");
+      await page.type("#hl-email", "ada@example.com");
+      await page.type("#hl-phone", "502-555-0100");
+      await page.type("#hl-address", "Prospect");
+      await page.click("#homeowner-consultation-form button[type=submit]");
+      await page.waitForFunction(() => location.pathname.indexOf("thank-you") !== -1, { timeout: 4000 });
+    }
+
+    async function submitBuilder() {
+      await page.type("#bl-name", "Sam Builder");
+      await page.type("#bl-company", "Sam Homes");
+      await page.type("#bl-email", "sam@example.com");
+      await page.type("#bl-phone", "502-555-0199");
+      await page.click("#builder-meeting-form button[type=submit]");
+      await page.waitForFunction(() => location.pathname.indexOf("thank-you") !== -1, { timeout: 4000 });
+    }
+
+    const directHome = BASE + "/smart-living/";
+    await resetAndGo(directHome);
+    await page.evaluate(() => document.querySelector("form").removeAttribute("data-netlify"));
+    await submitHomeowner();
+    let body = new URLSearchParams(posts[0] || "");
+    console.log("direct homeowner landing_page", body.get("landing_page"));
+    if (body.get("landing_page") !== directHome) fail("direct homeowner landing_page " + body.get("landing_page"));
+    else if (body.get("utm_source") || body.get("gclid")) fail("direct homeowner invented campaign params");
+    else if (body.get("form-name") !== "homeowner-consultation") fail("homeowner form-name missing from POST");
+    else ok("direct homeowner POST includes landing_page without campaign params");
+
+    const tagged = "?utm_source=google&utm_medium=cpc&utm_campaign=test&gclid=TEST123";
+    await resetAndGo(BASE + "/smart-living/" + tagged);
+    await submitHomeowner();
+    body = new URLSearchParams(posts[0] || "");
+    if (body.get("utm_source") !== "google" || body.get("utm_medium") !== "cpc" || body.get("utm_campaign") !== "test" || body.get("gclid") !== "TEST123") {
+      fail("tagged homeowner params " + posts[0]);
+    }
+    if (!body.get("landing_page") || body.get("landing_page").indexOf("gclid=TEST123") === -1) {
+      fail("tagged homeowner landing_page " + body.get("landing_page"));
+    } else ok("tagged homeowner POST includes landing_page and campaign params");
+
+    const directBuilder = BASE + "/builder-partners/";
+    await resetAndGo(directBuilder);
+    await submitBuilder();
+    body = new URLSearchParams(posts[0] || "");
+    if (body.get("landing_page") !== directBuilder) fail("direct builder landing_page " + body.get("landing_page"));
+    else if (body.get("form-name") !== "builder-meeting") fail("builder form-name missing from POST");
+    else ok("direct builder POST includes landing_page");
+
+    await resetAndGo(BASE + "/builder-partners/" + tagged);
+    await submitBuilder();
+    body = new URLSearchParams(posts[0] || "");
+    if (body.get("gclid") !== "TEST123" || body.get("utm_source") !== "google" || !String(body.get("landing_page")).includes("gclid=TEST123")) {
+      fail("tagged builder payload " + posts[0]);
+    } else ok("tagged builder POST includes landing_page and campaign params");
+
+    await resetAndGo(BASE + "/" + tagged);
+    await page.goto(BASE + "/builder-partners/", { waitUntil: "networkidle0" });
+    posts.length = 0;
+    await submitBuilder();
+    body = new URLSearchParams(posts[0] || "");
+    if (body.get("landing_page") !== BASE + "/" + tagged) fail("navigation replaced landing_page " + body.get("landing_page"));
+    else if (body.get("gclid") !== "TEST123") fail("navigation dropped gclid");
+    else ok("first-touch landing_page survives navigation to the builder form");
+
+    await page.goto(BASE + "/smart-living/?gclid=NEW456&utm_source=newsletter", { waitUntil: "networkidle0" });
+    const updated = await page.evaluate(() => {
+      const form = document.querySelector("form");
+      return {
+        landing: form.querySelector('[name="landing_page"]').value,
+        gclid: form.querySelector('[name="gclid"]').value,
+        source: form.querySelector('[name="utm_source"]').value
+      };
+    });
+    if (updated.landing !== BASE + "/" + tagged) fail("new visit overwrote landing_page " + updated.landing);
+    else if (updated.gclid !== "NEW456" || updated.source !== "newsletter") fail("new tagged visit did not update gclid/utm " + JSON.stringify(updated));
+    else ok("a new tagged visit updates gclid and utm without replacing landing_page");
+
+    await page.close();
+  }
+
   await browser.close();
   if (errors.length) {
     console.error("ERRORS", errors.length);
