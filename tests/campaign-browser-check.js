@@ -32,6 +32,9 @@ async function prepareForm(page) {
     if (source.indexOf(needle) !== -1) fail("campaign.js still contains " + needle);
   });
   if (source.indexOf("transaction_id: token") === -1) fail("conversion event is missing transaction_id");
+  const configSource = require("fs").readFileSync("/workspace/js/ads-config.js", "utf8");
+  if (configSource.indexOf('googleAdsId: "AW-18552161836"') === -1) fail("ads-config.js is missing AW-18552161836");
+  if (configSource.indexOf('homeownerConsultation: "REPLACE_ME"') === -1) fail("homeowner label should stay a placeholder");
   if (!errors.length) ok("campaign.js does not wrap fetch, sendBeacon, or XHR");
 
   const browser = await launch();
@@ -99,6 +102,7 @@ async function prepareForm(page) {
   {
     const page = await browser.newPage();
     let posts = 0;
+    const gtagUrls = [];
     await page.setRequestInterception(true);
     page.on("request", (req) => {
       if (req.method() === "POST") {
@@ -108,6 +112,9 @@ async function prepareForm(page) {
           req.respond({ status: 200, contentType: "text/plain", body: "ok" });
         }, 400);
         page.__body = body;
+      } else if (req.url().includes("googletagmanager.com/gtag/js")) {
+        gtagUrls.push(req.url());
+        req.respond({ status: 200, contentType: "application/javascript", body: "window.__jacknatGtagStub = true;" });
       } else req.continue();
     });
     await prepareForm(page);
@@ -123,19 +130,31 @@ async function prepareForm(page) {
     else ok("in-flight guard blocked a duplicate lead");
     if (!pending || pending.indexOf("homeowner-consultation") === -1) fail("token missing after 2xx");
     else ok("token stored only after 2xx");
-    const gtag = await page.evaluate(() => !!document.querySelector('script[src*="googletagmanager"]'));
-    if (gtag) fail("placeholder config loaded gtag");
-    else ok("placeholder config did not load gtag");
+    const tag = await page.evaluate(() => {
+      const script = document.querySelector('script[src*="googletagmanager.com/gtag/js"]');
+      const calls = (window.dataLayer || []).map((item) => Array.prototype.slice.call(item));
+      return {
+        src: script ? script.src : "",
+        configs: calls.filter((item) => item[0] === "config").map((item) => item[1]),
+        conversions: calls.filter((item) => item[0] === "event" && item[1] === "conversion")
+      };
+    });
+    if (!tag.src.includes("id=AW-18552161836")) fail("real ID did not load gtag config: " + tag.src);
+    if (tag.configs.indexOf("AW-18552161836") === -1) fail("gtag config was not queued");
+    if (tag.conversions.length) fail("placeholder label fired a conversion");
+    else ok("real ID loads gtag config and does not fire a conversion");
     const still = await page.evaluate(() => sessionStorage.getItem("jacknat_conversion_pending"));
     await page.reload({ waitUntil: "networkidle0" });
     const after = await page.evaluate(() => ({
       pending: sessionStorage.getItem("jacknat_conversion_pending"),
-      completed: Object.keys(sessionStorage).filter((k) => k.indexOf("jacknat_conversion_completed_") === 0)
+      completed: Object.keys(sessionStorage).filter((k) => k.indexOf("jacknat_conversion_completed_") === 0),
+      conversions: (window.dataLayer || []).map((item) => Array.prototype.slice.call(item)).filter((item) => item[0] === "event" && item[1] === "conversion")
     }));
-    if (after.pending !== still) fail("placeholder reload dropped the token");
+    if (after.pending !== still) fail("placeholder label removed the pending token");
     if (!after.pending.includes('"state":"pending"')) fail("pending state was not recorded");
-    if (after.completed.length) fail("placeholder wrote a completed token");
-    else ok("unconfigured thank-you keeps pending and does not complete it");
+    if (after.completed.length || after.conversions.length) fail("placeholder label completed or fired on reload");
+    else ok("placeholder label keeps the pending token");
+    if (!gtagUrls.some((url) => url.includes("id=AW-18552161836"))) fail("gtag.js was not requested for AW-18552161836");
     await page.close();
   }
 

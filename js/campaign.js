@@ -230,7 +230,8 @@
     if (!pending || pending.state === "completed" || pending.form !== expected || !pending.token) return;
     if (isCompleted(pending.token)) return;
 
-    // Placeholders stay pending. Do not load gtag and do not write a completed state.
+    // A placeholder label never fires a conversion and never completes the token.
+    // The base gtag config is loaded separately when the ID itself is real.
     settings = adsSettings();
     label = labelForForm(expected, settings);
     if (!isRealAdsId(settings.googleAdsId) || isPlaceholder(label)) return;

@@ -66,7 +66,7 @@ for (const path of pages) {
   }
   console.log("OK", res.status, path);
   if (res.text.includes("googletagmanager.com/gtag/js")) {
-    fail(path + " includes a gtag script while placeholders should keep it off");
+    fail(path + " pastes a raw gtag snippet; the shared loader should inject it");
   }
   if (residentialPaths.includes(path)) {
     if (!res.text.includes("mailto:smart.living@jacknat.com")) {
@@ -80,10 +80,12 @@ for (const path of pages) {
 
 const config = await get("/js/ads-config.js");
 if (!blocked && config.status === 200) {
-  if (!config.text.includes("AW-REPLACE_ME") || !config.text.includes("REPLACE_ME")) {
-    fail("ads-config.js no longer has the placeholder IDs; confirm that was intentional");
+  if (!config.text.includes('googleAdsId: "AW-18552161836"')) {
+    fail("ads-config.js is missing AW-18552161836");
+  } else if (!config.text.includes("REPLACE_ME")) {
+    fail("conversion labels should stay REPLACE_ME until Google Ads provides them");
   } else {
-    console.log("OK ads-config.js still has placeholders, so gtag must stay unloaded");
+    console.log("OK ads-config.js has AW-18552161836 and placeholder labels");
   }
 }
 

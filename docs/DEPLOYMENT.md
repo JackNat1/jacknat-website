@@ -76,13 +76,13 @@ After `--submit`:
 1. In Netlify, open **Forms** for `homeowner-consultation` and `builder-meeting`. Look in Verified submissions and in Spam submissions.
 2. Confirm each TEST entry includes the hidden UTM / `gclid` / `landing_page` fields and "How did you hear about us?".
 3. Confirm the notification email arrived at `smart.living@jacknat.com` and not at the ERP address.
-4. Open the thank-you URL directly in a browser. With the placeholder conversion ID still in `js/ads-config.js`, the page must not request `gtag/js`.
+4. Open the thank-you URL directly in a browser. The page should load `gtag/js` for `AW-18552161836` and send the base config. It must not send a conversion event while the label is still `REPLACE_ME`, and it must not remove a pending token.
 
 A local `python3 -m http.server` cannot accept these posts. Use the deploy preview for the real Netlify check.
 
 ## Google Ads measurement
 
-`js/ads-config.js` holds the conversion ID and the two conversion labels. They ship as named placeholders (`AW-REPLACE_ME`, `REPLACE_ME`). `js/campaign.js` does not load gtag while either value is still a placeholder, and it does not remove the pending token in that case.
+`js/ads-config.js` sets the Google Ads ID to `AW-18552161836`. Both conversion labels are still `REPLACE_ME`. With that real ID, `js/campaign.js` loads `gtag/js` once per page and sends `gtag('config', 'AW-18552161836')` so Tag Assistant can detect the tag. It does not send a conversion event, and it does not complete or remove a pending token, until the label for that form is a real value.
 
 After a 2xx form response, the page stores one token with state `pending`, then opens the thank-you page. The consultation event is sent only from `/smart-living/thank-you/` for `homeowner-consultation`, and only when that label is a real value. `/builder-partners/thank-you/` does not send the consultation conversion. It sends a builder conversion only for `builder-meeting` and only when that label has been replaced.
 
@@ -110,7 +110,7 @@ Do these in order. Leave the Google Ads campaign **Paused** until conversion tra
 
 - [ ] Test submissions received for `homeowner-consultation` and `builder-meeting` (Verified or reviewed out of Spam).
 - [ ] Both forms notify `smart.living@jacknat.com` only. Customer follow-ups use that address. ERP mail stays on `erp@jacknat.com`.
-- [ ] Google Ads conversion ID and the consultation label are in `js/ads-config.js` (no `REPLACE_ME`). The thank-you callback shows the tag fired. Confirm the conversion was recorded and attributed in Google Ads conversion diagnostics or Tag Assistant. A completed token does not fire again on reload.
+- [ ] Conversion ID `AW-18552161836` is set. Paste the consultation label over `REPLACE_ME` in `js/ads-config.js`. Until that label is real, gtag config may load but no conversion fires. After it is set, the thank-you callback only shows the tag fired. Confirm the conversion was recorded and attributed in Google Ads conversion diagnostics or Tag Assistant. A completed token does not fire again on reload.
 - [ ] Award wording "2026 Homearama Best Use of Technology Award Winner" is confirmed, and the privacy page is approved.
 - [ ] This pull request is merged, and production `https://jacknat.com/smart-living/`, `/builder-partners/`, `/privacy/`, and both thank-you URLs are checked.
 - [ ] Google Ads stays **Paused** until the conversion above is active and tested. Then it can be enabled in Google Ads. This repo does not turn the campaign on.
