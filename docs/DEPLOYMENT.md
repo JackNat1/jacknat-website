@@ -27,18 +27,22 @@ The README still includes older GoDaddy upload steps. Those are not how this sit
 
 Before this change the site had no analytics snippet and no Netlify Forms.
 
-`contact.html` is a mailto draft. Choosing an interest opens the visitor's mail app to `erp@jacknat.com` (enterprise, business and home, or other) or `smart.living@jacknat.com` (connected home). Nothing on that form is stored by the site. Those two addresses are the only inboxes referenced in the repo. `jack@jacknat.com` does not appear in the existing pages.
+`contact.html` is a mailto draft. Enterprise ERP inquiries open `erp@jacknat.com`. Residential Smart Living inquiries, including connected-home messages, open `smart.living@jacknat.com`. Nothing on that form is stored by the site.
+
+Residential Smart Living pages, homeowner and builder forms, thank-you pages, and follow-up mail use **smart.living@jacknat.com** only. ERP pages keep **erp@jacknat.com**.
 
 ## Campaign forms
 
 Two static forms are registered by Netlify at deploy time:
 
-| Form name | Page | Success URL |
-|---|---|---|
-| `homeowner-consultation` | `/smart-living/` | `/smart-living/thank-you/` |
-| `builder-meeting` | `/builder-partners/` | `/builder-partners/thank-you/` |
+| Form name | Page | Success URL | Notification and follow-up |
+|---|---|---|---|
+| `homeowner-consultation` | `/smart-living/` | `/smart-living/thank-you/` | `smart.living@jacknat.com` only |
+| `builder-meeting` | `/builder-partners/` | `/builder-partners/thank-you/` | `smart.living@jacknat.com` only |
 
 Each form posts with `data-netlify="true"` and `netlify-honeypot="bot-field"`. Hidden fields `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `gclid`, and `landing_page` are filled from the URL on the first page of the visit and kept for the session (`sessionStorage` plus a first-party session cookie named `jacknat_lead`). A visible "How did you hear about us?" field is included. `js/campaign.js`, loaded with `js/ads-config.js` on every page, does that capture.
+
+With JavaScript, the form is sent with `fetch` as `application/x-www-form-urlencoded` to `/`, including `form-name` and the honeypot field. The submit button is disabled and an in-flight flag is set for that request. A second click does not send another lead. The one-time conversion token is stored only after a 2xx response, and the browser then goes to the thank-you page. A network failure or any non-2xx response shows an inline error, turns the button back on, and leaves every typed field as it was. Without JavaScript, the browser uses the form's normal POST and `action` (the thank-you URL).
 
 Netlify filters every submission with its spam filter (Akismet). Honeypot hits are rejected and do not appear in the submissions list. Spam-flagged tests can sit under Forms → the form → Spam submissions.
 
@@ -46,23 +50,43 @@ Netlify filters every submission with its spam filter (Akismet). Honeypot hits a
 
 The notification recipient cannot be set in this repo. Netlify only allows the email address under site configuration. A hidden `subject` field is set in each form so the message subject is version-controlled. Do not also set a different subject in the UI; the HTML subject wins.
 
+Both forms notify **smart.living@jacknat.com** only. Customer follow-ups for homeowner consultations and builder meetings use that same address. Do not add `erp@jacknat.com` to these two forms. `erp@jacknat.com` stays the address for ERP and enterprise consulting.
+
 For each form, add one email notification:
 
 1. Open https://app.netlify.com/projects/superlative-licorice-54daa4
 2. Go to **Forms → Submission notifications → Add notification → Email notification**. (Older nav: **Configuration → Notifications → Form submission notifications**.)
 3. Event: new verified form submission. Choose `homeowner-consultation`, then repeat for `builder-meeting`.
-4. Email to notify: `jack@jacknat.com`
-5. Save, then submit a tagged test on a deploy preview and confirm the message arrives. Also check spam, and the form's Spam submissions list, because test entries are often flagged.
+4. Email to notify: `smart.living@jacknat.com`
+5. Save. Confirm no other address is on either form. Then run the preview check below and confirm the message arrives only at `smart.living@jacknat.com`. Also check spam, and the form's Spam submissions list, because test entries are often flagged.
 
 If form submissions 404, open **Forms → Form detection**, turn detection on, and redeploy.
 
-There is no ProjectOps URL, webhook, or inbox integration in this repo. The form body already includes the hidden tracking fields and "How did you hear about us?" so a notification email or a later outgoing webhook can carry them. Adding that webhook is a Netlify UI step once the destination exists: **Forms → Submission notifications → Add notification → Outgoing webhook**.
+### Verify a real submission on the deploy preview
+
+Deploy previews for this site ask for a Netlify login. Open the preview while logged in, or run the script from a session that can fetch it. The script checks the pages first. `--submit` posts one labeled TEST lead to each form.
+
+```bash
+node tests/verify-netlify-preview.mjs https://deploy-preview-5--superlative-licorice-54daa4.netlify.app
+node tests/verify-netlify-preview.mjs https://deploy-preview-5--superlative-licorice-54daa4.netlify.app --submit
+```
+
+After `--submit`:
+
+1. In Netlify, open **Forms** for `homeowner-consultation` and `builder-meeting`. Look in Verified submissions and in Spam submissions.
+2. Confirm each TEST entry includes the hidden UTM / `gclid` / `landing_page` fields and "How did you hear about us?".
+3. Confirm the notification email arrived at `smart.living@jacknat.com` and not at the ERP address.
+4. Open the thank-you URL directly in a browser. With the placeholder conversion ID still in `js/ads-config.js`, the page must not request `gtag/js`.
+
+A local `python3 -m http.server` cannot accept these posts. Use the deploy preview for the real Netlify check.
 
 ## Google Ads measurement
 
-`js/ads-config.js` holds the conversion ID and the two conversion labels. They ship as named placeholders (`AW-REPLACE_ME`, `REPLACE_ME`). `js/campaign.js` loads gtag once per page only when the ID matches a real `AW-` number. It does not load Google's script while the placeholder is in place.
+`js/ads-config.js` holds the conversion ID and the two conversion labels. They ship as named placeholders (`AW-REPLACE_ME`, `REPLACE_ME`). `js/campaign.js` does not load gtag while either value is still a placeholder, and it does not remove the pending token in that case.
 
-The consultation conversion event is sent only from `/smart-living/thank-you/` after a `homeowner-consultation` submit, and only once for that submission (a `sessionStorage` token blocks reloads and direct visits). `/builder-partners/thank-you/` does not send the consultation conversion. It sends a builder conversion only after a `builder-meeting` submit and only when that form's own label has been replaced.
+After a 2xx form response, the page stores one token for that submission and then opens the thank-you page. The consultation event is sent only from `/smart-living/thank-you/` for `homeowner-consultation`, and only when that label is a real value. `/builder-partners/thank-you/` does not send the consultation conversion. It sends a builder conversion only for `builder-meeting` and only when that label has been replaced.
+
+The token is claimed once, when a configured conversion is started, so a reload or the back button does not send a second event. The pending token is removed only after gtag reports the hit was sent (`event_callback` plus an outbound conversion request). A timeout is not treated as success and does not delete the token.
 
 No conversion value is sent. Enhanced conversions and GA4 are not installed.
 
@@ -77,3 +101,16 @@ python3 -m http.server 8080
 ```
 
 Open `http://localhost:8080/`. Netlify will not accept form posts on that server. Use a deploy preview to test submissions.
+
+## Launch checklist
+
+Do these in order. Leave the Google Ads campaign **Paused** until conversion tracking is active and a test conversion has been confirmed.
+
+- [ ] Test submissions received for `homeowner-consultation` and `builder-meeting` (Verified or reviewed out of Spam).
+- [ ] Both forms notify `smart.living@jacknat.com` only. Customer follow-ups use that address. ERP mail stays on `erp@jacknat.com`.
+- [ ] Google Ads conversion ID and the consultation label are in `js/ads-config.js` (no `REPLACE_ME`). A real thank-you submission sends one conversion and a reload does not send another.
+- [ ] Award wording "2026 Homearama Best Use of Technology Award Winner" is confirmed, and the privacy page is approved.
+- [ ] This pull request is merged, and production `https://jacknat.com/smart-living/`, `/builder-partners/`, `/privacy/`, and both thank-you URLs are checked.
+- [ ] Google Ads stays **Paused** until the conversion above is active and tested. Then it can be enabled in Google Ads. This repo does not turn the campaign on.
+
+Phase 2, not required to launch: ProjectOps webhook, project photos, the Homearama case study, and the builder overview PDF. The form body already includes the tracking fields for a later outgoing webhook (**Forms → Submission notifications → Outgoing webhook**).

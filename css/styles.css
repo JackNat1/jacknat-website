@@ -222,6 +222,7 @@ li { margin-bottom: 0.35rem; }
 }
 .page-hero h1 { color: var(--white); }
 .page-hero .lede { color: var(--slate-300); max-width: 40rem; margin: 0; font-size: 1.1rem; }
+.page-hero .lede a { color: var(--gold-400); }
 
 /* Sections */
 .section { padding: 4rem 0; }
@@ -723,6 +724,12 @@ li { margin-bottom: 0.35rem; }
 }
 .check-option input { width: auto; margin-top: 0.25rem; flex-shrink: 0; }
 .privacy-note { font-size: 0.9rem; color: var(--slate-600); margin: 0.85rem 0 0; }
+.form-error {
+  background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+  border-radius: var(--radius); padding: 0.75rem 1rem; margin: 0 0 1rem;
+  font-size: 0.95rem;
+}
+.btn:disabled { opacity: 0.7; cursor: progress; }
 .form-honeypot {
   position: absolute; left: -10000px; top: auto;
   width: 1px; height: 1px; overflow: hidden;

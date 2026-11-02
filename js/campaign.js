@@ -165,18 +165,99 @@
   function markPending(form) {
     var formName = form.getAttribute("data-conversion-form");
     var token, payload;
-    if (!formName || !FORM_LABELS[formName]) return;
+    if (!formName || !FORM_LABELS[formName]) return false;
     token = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
     payload = JSON.stringify({ form: formName, token: token });
     try {
       sessionStorage.setItem(PENDING_KEY, payload);
-    } catch (err) {}
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function releaseForm(form) {
+    form.removeAttribute("data-submitting");
+    var button = form.querySelector('[type="submit"]');
+    if (button) button.disabled = false;
+  }
+
+  function showFormError(form) {
+    var errorEl = form.querySelector("[data-form-error]");
+    releaseForm(form);
+    if (!errorEl) return;
+    errorEl.hidden = false;
+    errorEl.textContent = "We couldn't send your request. Please try again, or email smart.living@jacknat.com.";
+  }
+
+  function hideFormError(form) {
+    var errorEl = form.querySelector("[data-form-error]");
+    if (!errorEl) return;
+    errorEl.hidden = true;
+    errorEl.textContent = "";
+  }
+
+  // Record an outbound conversion hit. gtag's event_callback also runs on its
+  // own timeout, so a callback alone is not proof the hit was sent.
+  function watchConversionSend(sendTo, onSent) {
+    var idPart = sendTo.split("/")[0].replace(/^AW-/, "");
+    var label = sendTo.split("/")[1] || "";
+
+    function matches(value) {
+      var text = value == null ? "" : String(value);
+      if (!text || text.indexOf(idPart) === -1) return false;
+      return !label || text.indexOf(label) !== -1;
+    }
+
+    if (navigator.sendBeacon && !navigator.__jacknatBeaconWrapped) {
+      var originalBeacon = navigator.sendBeacon.bind(navigator);
+      navigator.sendBeacon = function (url, data) {
+        var queued = originalBeacon(url, data);
+        if (queued && (matches(url) || matches(data))) onSent();
+        return queued;
+      };
+      navigator.__jacknatBeaconWrapped = true;
+    }
+
+    if (window.fetch && !window.__jacknatFetchWrapped) {
+      var originalFetch = window.fetch;
+      window.fetch = function (input, init) {
+        var url = typeof input === "string" ? input : (input && input.url);
+        var pending = originalFetch.apply(this, arguments);
+        if (matches(url)) {
+          pending.then(function (res) {
+            if (res && res.ok) onSent();
+          }, function () {});
+        }
+        return pending;
+      };
+      window.__jacknatFetchWrapped = true;
+    }
+
+    if (window.XMLHttpRequest && !window.__jacknatXhrWrapped) {
+      var originalOpen = XMLHttpRequest.prototype.open;
+      var originalSend = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.open = function (method, url) {
+        this.__jacknatUrl = url;
+        return originalOpen.apply(this, arguments);
+      };
+      XMLHttpRequest.prototype.send = function () {
+        var xhr = this;
+        if (matches(xhr.__jacknatUrl)) {
+          xhr.addEventListener("load", function () {
+            if (xhr.status >= 200 && xhr.status < 300) onSent();
+          });
+        }
+        return originalSend.apply(this, arguments);
+      };
+      window.__jacknatXhrWrapped = true;
+    }
   }
 
   function maybeFireConversion() {
     var expected = document.body ? document.body.getAttribute("data-conversion-form") : "";
-    var pending, firedKey, settings, label;
-    if (!expected) return;
+    var pending, firedKey, claimKey, settings, label, sendTo, completed, sent, callbackFired;
+    if (!expected || window.__jacknatConversionBusy) return;
     try {
       pending = parseJson(sessionStorage.getItem(PENDING_KEY));
     } catch (err) {
@@ -185,34 +266,102 @@
     if (!pending || pending.form !== expected || !pending.token) return;
 
     firedKey = "jacknat_conversion_fired_" + pending.token;
+    claimKey = "jacknat_conversion_claimed_" + pending.token;
     try {
-      if (sessionStorage.getItem(firedKey)) return;
-      sessionStorage.setItem(firedKey, "1");
-      sessionStorage.removeItem(PENDING_KEY);
+      if (sessionStorage.getItem(firedKey) === "1") return;
+      if (sessionStorage.getItem(claimKey) === "1") return;
     } catch (err) {
       return;
     }
 
+    // Placeholders stay pending. Do not claim the token and do not load gtag.
     settings = adsSettings();
     label = labelForForm(expected, settings);
     if (!isRealAdsId(settings.googleAdsId) || isPlaceholder(label)) return;
+    sendTo = settings.googleAdsId + "/" + label;
+
+    // One shot per successful submission. Reload and back-forward reuse this claim
+    // and do not call gtag again. The pending token itself is removed only after
+    // the hit is actually sent.
+    window.__jacknatConversionBusy = true;
+    try {
+      sessionStorage.setItem(claimKey, "1");
+    } catch (err) {
+      window.__jacknatConversionBusy = false;
+      return;
+    }
+
+    completed = false;
+    sent = false;
+    callbackFired = false;
+
+    function markComplete() {
+      if (completed || !sent || !callbackFired) return;
+      completed = true;
+      try {
+        sessionStorage.setItem(firedKey, "1");
+        sessionStorage.removeItem(PENDING_KEY);
+      } catch (err) {}
+    }
+
+    watchConversionSend(sendTo, function () {
+      sent = true;
+      markComplete();
+    });
 
     loadGtag(settings.googleAdsId);
     window.gtag("event", "conversion", {
-      send_to: settings.googleAdsId + "/" + label
+      send_to: sendTo,
+      event_callback: function () {
+        callbackFired = true;
+        markComplete();
+      }
+    });
+
+    // Timeout is not success. Leave the pending token in place.
+    window.setTimeout(function () {}, 3000);
+  }
+
+  function submitForm(form) {
+    var body;
+    hideFormError(form);
+    try {
+      fillForms(captureAttribution());
+    } catch (err) {}
+
+    body = new URLSearchParams(new FormData(form)).toString();
+
+    // Netlify registers the AJAX post from the site root when form-name is present.
+    // The action attribute remains the no-JS success URL.
+    fetch("/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body
+    }).then(function (res) {
+      var action;
+      if (!res || res.status < 200 || res.status >= 300) throw new Error("rejected");
+      markPending(form);
+      action = form.getAttribute("action") || "/";
+      window.location.assign(action);
+    }).catch(function () {
+      // Network failure or non-2xx: stay on the form and keep typed values.
+      showFormError(form);
     });
   }
 
   document.addEventListener("submit", function (event) {
     var form = event.target;
-    var stored;
+    var button;
     if (!form || !form.getAttribute || form.getAttribute("data-netlify") !== "true") return;
-    try {
-      stored = captureAttribution();
-      fillForms(stored);
-    } catch (err) {}
-    markPending(form);
-  }, true);
+    // No-JS fallback: without fetch, let the browser POST to the thank-you action.
+    if (!window.fetch || !window.FormData || !window.URLSearchParams) return;
+    event.preventDefault();
+    if (form.getAttribute("data-submitting") === "true") return;
+    form.setAttribute("data-submitting", "true");
+    button = form.querySelector('[type="submit"]');
+    if (button) button.disabled = true;
+    submitForm(form);
+  });
 
   try {
     fillForms(captureAttribution());
@@ -222,4 +371,7 @@
     loadGtag(adsSettings().googleAdsId);
   }
   maybeFireConversion();
+  window.addEventListener("pageshow", function (event) {
+    if (event.persisted) maybeFireConversion();
+  });
 })();
